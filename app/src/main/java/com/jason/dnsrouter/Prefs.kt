@@ -77,6 +77,7 @@ class Prefs(private val ctx: Context) {
     var lastSuccessfulTest: Long get() = f.getLong("last_test", 0); set(v) = f.edit().putLong("last_test", v).apply()
     var adminEmail: String get() = f.getString("admin_email", "") ?: ""; set(v) = f.edit().putString("admin_email", v).apply()
     var adminPhone: String get() = f.getString("admin_phone", "") ?: ""; set(v) = f.edit().putString("admin_phone", v).apply()
+    var controlMode: Int get() = f.getInt("control_mode", 0); set(v) = f.edit().putInt("control_mode", v).apply() // 0=Unset, 1=Personal, 2=Admin
 
     fun checkPin(pin: String): Boolean {
         val salt = pinSalt ?: return false

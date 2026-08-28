@@ -16,6 +16,7 @@ import android.text.method.PasswordTransformationMethod
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.view.inputmethod.InputMethodManager
 import android.widget.*
 import java.net.HttpURLConnection
 import java.net.InetAddress
@@ -38,6 +39,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var autoStartBtn: Button
     private lateinit var pinManageBtn: Button
     private lateinit var appExclusionBtn: Button
+    private lateinit var adminSwitchBtn: Button
     
     private lateinit var profile: EditText
     private lateinit var apiKey: EditText
@@ -50,17 +52,18 @@ class MainActivity : AppCompatActivity() {
     private lateinit var saveConfigBtn: Button
     private lateinit var wifiExclusionBtn: Button
     
+    private lateinit var adminSectionLabel: TextView
+    private lateinit var adminEmailLabel: TextView
+    private lateinit var adminPhoneLabel: TextView
+
     private var isAdminMode = false
 
-    // Reliability indicators
     private lateinit var alwaysOnCircle: View
     private lateinit var batteryCircle: View
     private lateinit var autoStartCircle: View
     private lateinit var currentNetworkTv: TextView
     private lateinit var wifiExclusionTv: TextView
     private lateinit var wifiExclusionCircle: View
-    
-    // Security diagnostic indicators
     private lateinit var dnsCheckCircle: View
     private lateinit var browserWarningCircle: View
     private lateinit var connectivityCircle: View
@@ -73,64 +76,55 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(b: Bundle?) {
         super.onCreate(b); p = Prefs(this)
         isAdminMode = isAppManaged()
-        buildUi()
-        checkVersionAndReport()
-        requestWifiPermission()
+        if (p.controlMode == 0 && !isAdminMode) {
+            showControlModeSelection()
+        } else {
+            if (isAdminMode) p.controlMode = 2
+            buildUi(); checkVersionAndReport(); requestWifiPermission()
+        }
     }
 
-    override fun onResume() { 
-        super.onResume()
-        updateUi()
+    private fun showControlModeSelection() {
+        val options = arrayOf(
+            "User Setup: You control DNS Router settings on this device.",
+            "Admin-controlled setup: A network administrator controls DNS Router settings on this device. Some settings will be locked and can only be changed with the administrator PIN."
+        )
+        AlertDialog.Builder(this)
+            .setTitle("Initial Setup: Select Control Mode")
+            .setCancelable(false)
+            .setItems(options) { _, which ->
+                p.controlMode = which + 1
+                if (p.controlMode == 2) {
+                    showSetPinDialog { buildUi(); requestWifiPermission(); toast("Admin mode active. PIN, Email, and Phone required.") }
+                } else {
+                    buildUi(); requestWifiPermission()
+                }
+            }.show()
     }
+
+    override fun onResume() { super.onResume(); if (p.controlMode != 0 || isAdminMode) updateUi() }
 
     private fun checkVersionAndReport() {
         val currentVersion = try { packageManager.getPackageInfo(packageName, 0).versionCode } catch (_: Exception) { 0 }
-        if (p.lastVersionCode != currentVersion) {
-            p.lastVersionCode = currentVersion
-            showCompatibilityReport(isAuto = true)
-        }
+        if (p.lastVersionCode != currentVersion) { p.lastVersionCode = currentVersion; showCompatibilityReport(isAuto = true) }
     }
 
     private fun buildUi() {
         val root = ScrollView(this).apply { isFillViewport = true }
         val container = LinearLayout(this).apply { 
             orientation = LinearLayout.VERTICAL
-            setPadding(32, 28, 32, 100 * (resources.displayMetrics.density).toInt())
+            setPadding(32, 28, 32, 120 * (resources.displayMetrics.density).toInt())
         }
         root.addView(container)
-        
         val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         header.addView(TextView(this).apply { text = "DNS Router"; textSize = 30f; layoutParams = LinearLayout.LayoutParams(0, -2, 1f) })
-        
-        if (isAdminMode) {
-            header.addView(Button(this).apply { 
-                text = "Support"
-                textSize = 12f
-                setOnClickListener { showSupportOptions() }
-            })
-        }
-        
-        header.addView(Button(this).apply { 
-            text = "Report"
-            textSize = 12f
-            setOnClickListener { showCompatibilityReport(isAuto = false) }
-        })
+        if (p.controlMode == 2 || isAdminMode) header.addView(Button(this).apply { text = "Support"; textSize = 12f; setOnClickListener { showSupportOptions() } })
+        header.addView(Button(this).apply { text = "Report"; textSize = 12f; setOnClickListener { showCompatibilityReport(isAuto = false) } })
         container.addView(header)
-        
-        if (isAdminMode) {
-            container.addView(TextView(this).apply { 
-                text = "NETWORK ADMIN MODE ACTIVE"; setTextColor(Color.RED)
-                textSize = 12f; gravity = Gravity.CENTER; setPadding(0, 0, 0, 8)
-            })
-        }
-        
-        status = TextView(this).apply { textSize = 16f; setPadding(0, 12, 0, 12) }
-        container.addView(status)
-
+        if (isAdminMode || p.controlMode == 2) container.addView(TextView(this).apply { text = "NETWORK ADMIN MODE ACTIVE"; setTextColor(Color.RED); textSize = 12f; gravity = Gravity.CENTER; setPadding(0, 0, 0, 8) })
+        status = TextView(this).apply { textSize = 16f; setPadding(0, 12, 0, 12) }; container.addView(status)
         container.addView(TextView(this).apply { text = "Reliability Status"; textSize = 18f; setPadding(0, 16, 0, 8) })
-        val relCard = LinearLayout(this).apply { 
-            orientation = LinearLayout.VERTICAL; setPadding(24, 16, 24, 16); setBackgroundColor(Color.parseColor("#08000000"))
-        }
+        val relCard = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 16, 24, 16); setBackgroundColor(Color.parseColor("#08000000")) }
         alwaysOnCircle = View(this); relCard.addView(createReliabilityRow("Always-on VPN", alwaysOnCircle))
         batteryCircle = View(this); relCard.addView(createReliabilityRow("Battery Optimization", batteryCircle))
         autoStartCircle = View(this); relCard.addView(createReliabilityRow("Boot Auto-Start", autoStartCircle))
@@ -138,108 +132,117 @@ class MainActivity : AppCompatActivity() {
         val wifiExRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         wifiExclusionTv = TextView(this).apply { textSize = 14f; layoutParams = LinearLayout.LayoutParams(0, -2, 1f) }
         wifiExclusionCircle = View(this).apply { layoutParams = LinearLayout.LayoutParams(24, 24) }
-        wifiExRow.addView(wifiExclusionTv); wifiExRow.addView(wifiExclusionCircle); relCard.addView(wifiExRow)
-        container.addView(relCard)
-
+        wifiExRow.addView(wifiExclusionTv); wifiExRow.addView(wifiExclusionCircle); relCard.addView(wifiExRow); container.addView(relCard)
         container.addView(TextView(this).apply { text = "Security Diagnostics"; textSize = 18f; setPadding(0, 24, 0, 8) })
-        val secCard = LinearLayout(this).apply { 
-            orientation = LinearLayout.VERTICAL; setPadding(24, 16, 24, 16); setBackgroundColor(Color.parseColor("#08000000"))
-        }
+        val secCard = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 16, 24, 16); setBackgroundColor(Color.parseColor("#08000000")) }
         dnsCheckCircle = View(this); secCard.addView(createReliabilityRow("DNS Protection Check", dnsCheckCircle))
         browserWarningCircle = View(this); secCard.addView(createReliabilityRow("Browser DNS Status", browserWarningCircle))
         connectivityCircle = View(this); secCard.addView(createReliabilityRow("NextDNS Connectivity", connectivityCircle))
         cloudCircle = View(this); secCard.addView(createReliabilityRow("Cloud Log Verification", cloudCircle))
         lastTestTv = TextView(this).apply { textSize = 12f; setPadding(0, 8, 0, 8); alpha = 0.7f }; secCard.addView(lastTestTv)
-        secCard.addView(Button(this).apply { text = "Run Security Tests"; textSize = 12f; setOnClickListener { runSecurityTests() } })
-        container.addView(secCard)
-        
-        systemStatus = TextView(this).apply { textSize = 14f; setPadding(24, 16, 24, 16); setBackgroundColor(Color.parseColor("#10000000")) }
-        container.addView(systemStatus)
-
+        secCard.addView(Button(this).apply { text = "Run Security Tests"; textSize = 12f; setOnClickListener { runSecurityTests() } }); container.addView(secCard)
+        systemStatus = TextView(this).apply { textSize = 14f; setPadding(24, 16, 24, 16); setBackgroundColor(Color.parseColor("#10000000")) }; container.addView(systemStatus)
         container.addView(TextView(this).apply { text = "Setup & Protection"; textSize = 18f; setPadding(0, 24, 0, 8) })
         val grid = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val row1 = createRow()
         toggleBtn = createGridButton("DNS Protection") { val desired = !p.enabled; auth { p.enabled = desired; if (desired) requestVpn() else stopVpn(); updateUi() } }
-        autoStartBtn = createGridButton("Auto-Start") { if (isAdminMode) { toast("Managed by Administrator"); return@createGridButton }; p.autoStart = !p.autoStart; updateUi(); toast("Auto-start ${if (p.autoStart) "enabled" else "disabled"}") }
+        autoStartBtn = createGridButton("Auto-Start") { if (isAdminMode || p.controlMode == 2) { toast("Managed by Administrator"); return@createGridButton }; p.autoStart = !p.autoStart; updateUi(); toast("Auto-start ${if (p.autoStart) "enabled" else "disabled"}") }
         row1.addView(toggleBtn); row1.addView(autoStartBtn); grid.addView(row1)
         val row2 = createRow()
-        foregroundBtn = createGridButton("Foreground") { if (isAdminMode) { toast("Managed by Administrator"); return@createGridButton }; p.foregroundService = !p.foregroundService; updateUi(); toast("Foreground mode ${if (p.foregroundService) "ON" else "OFF"}") }
+        foregroundBtn = createGridButton("Foreground") { if (isAdminMode || p.controlMode == 2) { toast("Managed by Administrator"); return@createGridButton }; p.foregroundService = !p.foregroundService; updateUi(); toast("Foreground mode ${if (p.foregroundService) "ON" else "OFF"}") }
         batteryBtn = createGridButton("Battery Opt") { showBatteryDialog() }
         row2.addView(foregroundBtn); row2.addView(batteryBtn); grid.addView(row2)
         container.addView(TextView(this).apply { text = "Note: Foreground service keeps the DNS protection active but does not mean the app screen is running."; textSize = 11f; alpha = 0.6f; setPadding(8, 0, 8, 0) })
         val row3 = createRow()
         alwaysOnBtn = createGridButton("Always-On VPN") { showSetup() }
-        wifiExclusionBtn = createGridButton("Wi-Fi Excl.") { if (isAdminMode) { toast("Managed by Administrator"); return@createGridButton }; auth { editExclusions() } }
-        row3.addView(alwaysOnBtn); row3.addView(wifiExclusionBtn); grid.addView(row3)
-        container.addView(grid)
+        wifiExclusionBtn = createGridButton("Wi-Fi Excl.") { if (isAdminMode || p.controlMode == 2) { toast("Managed by Administrator"); return@createGridButton }; auth { editExclusions() } }
+        row3.addView(alwaysOnBtn); row3.addView(wifiExclusionBtn); grid.addView(row3); container.addView(grid)
         
-        // App Exclusions Button
-        appExclusionBtn = Button(this).apply { 
-            text = "App Exclusions 🔒"; setOnClickListener { auth { manageAppExclusions() } }
-        }
+        appExclusionBtn = Button(this).apply { text = "App Exclusions 🔒"; setOnClickListener { auth { manageAppExclusions() } } }
         container.addView(appExclusionBtn)
 
         container.addView(TextView(this).apply { text = "NextDNS Configuration"; textSize = 18f; setPadding(0, 32, 0, 8) })
         container.addView(TextView(this).apply { text = "Select networks to protect with NextDNS. Unselected networks will bypass the VPN tunnel."; textSize = 12f; alpha = 0.7f; setPadding(0, 0, 0, 8) })
-        container.addView(CheckBox(this).apply { text = "Protect Wi-Fi Networks"; isChecked = p.protectWifi; isEnabled = !isAdminMode; setOnCheckedChangeListener { _, isChecked -> p.protectWifi = isChecked; updateUi() } })
+        container.addView(CheckBox(this).apply { text = "Protect Wi-Fi Networks"; isChecked = p.protectWifi; isEnabled = !(isAdminMode || p.controlMode == 2); setOnCheckedChangeListener { _, isChecked -> p.protectWifi = isChecked; updateUi() } })
         container.addView(CheckBox(this).apply { text = "Protect Mobile/Cellular Data"; isChecked = p.protectMobile; setOnCheckedChangeListener { _, isChecked -> p.protectMobile = isChecked; updateUi() } })
-        container.addView(CheckBox(this).apply { text = "Protect Other Networks (Ethernet, USB, etc.)"; isChecked = p.protectOther; isEnabled = !isAdminMode; setOnCheckedChangeListener { _, isChecked -> p.protectOther = isChecked; updateUi() } })
-
+        container.addView(CheckBox(this).apply { text = "Protect Other Networks (Ethernet, USB, etc.)"; isChecked = p.protectOther; isEnabled = !(isAdminMode || p.controlMode == 2); setOnCheckedChangeListener { _, isChecked -> p.protectOther = isChecked; updateUi() } })
         container.addView(TextView(this).apply { text = "Profile ID"; setPadding(0, 8, 0, 4) })
-        profile = EditText(this).apply { hint = "Profile ID"; setText(p.profile); isSingleLine = true; isEnabled = !isAdminMode }
+        profile = EditText(this).apply { hint = "Profile ID"; setText(p.profile); isSingleLine = true; isEnabled = !(isAdminMode || p.controlMode == 2); if (Build.VERSION.SDK_INT >= 26) { importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO } }
         container.addView(profile)
-
         container.addView(TextView(this).apply { text = "Device Identifier"; setPadding(0, 16, 0, 4) })
-        device = EditText(this).apply { hint = "Mobile Device (if blank)"; setText(p.manualDeviceName); isSingleLine = true; visibility = if (p.useDeviceName) View.GONE else View.VISIBLE; isEnabled = !isAdminMode }
+        device = EditText(this).apply { hint = "Mobile Device (if blank)"; setText(p.manualDeviceName); isSingleLine = true; visibility = if (p.useDeviceName) View.GONE else View.VISIBLE; isEnabled = !(isAdminMode || p.controlMode == 2) }
         container.addView(device)
-        useDeviceNameCb = CheckBox(this).apply { text = "Use this device's name"; isChecked = p.useDeviceName; isEnabled = !isAdminMode; setOnCheckedChangeListener { _, isChecked -> device.visibility = if (isChecked) View.GONE else View.VISIBLE } }
+        useDeviceNameCb = CheckBox(this).apply { text = "Use this device's name"; isChecked = p.useDeviceName; isEnabled = !(isAdminMode || p.controlMode == 2); setOnCheckedChangeListener { _, isChecked -> device.visibility = if (isChecked) View.GONE else View.VISIBLE } }
         container.addView(useDeviceNameCb)
-
         container.addView(TextView(this).apply { text = "API Key (optional)"; setPadding(0, 16, 0, 4) })
         container.addView(TextView(this).apply { text = "Enables cloud analytics and logs. If omitted, only local device counters are shown."; textSize = 12f; alpha = 0.7f; setPadding(0, 0, 0, 8) })
         apiKeyLayout = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        apiKey = EditText(this).apply { hint = "NextDNS API Key"; setText(p.apiKey); isSingleLine = true; inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD; layoutParams = LinearLayout.LayoutParams(0, -2, 1f); isEnabled = !isAdminMode }
-        val showKeyBtn = ImageButton(this).apply { setImageResource(android.R.drawable.ic_menu_view); isEnabled = !isAdminMode
+        apiKey = EditText(this).apply { hint = "NextDNS API Key"; setText(p.apiKey); isSingleLine = true; inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD; layoutParams = LinearLayout.LayoutParams(0, -2, 1f); isEnabled = !(isAdminMode || p.controlMode == 2) }
+        val showKeyBtn = ImageButton(this).apply { setImageResource(android.R.drawable.ic_menu_view); isEnabled = !(isAdminMode || p.controlMode == 2)
             setOnClickListener { if (apiKey.transformationMethod == null) { apiKey.transformationMethod = PasswordTransformationMethod.getInstance(); setImageResource(android.R.drawable.ic_menu_view) } else { apiKey.transformationMethod = null; setImageResource(android.R.drawable.ic_delete) }; apiKey.setSelection(apiKey.text.length) }
         }
         apiKeyLayout.addView(apiKey); apiKeyLayout.addView(showKeyBtn); container.addView(apiKeyLayout)
-        removeApiKeyBtn = Button(this).apply { text = "Remove API Key"; visibility = if (p.apiKey.isNotEmpty() && !isAdminMode) View.VISIBLE else View.GONE; setOnClickListener { auth { p.apiKey = ""; apiKey.setText(""); updateUi(); toast("API Key removed") } } }
+        removeApiKeyBtn = Button(this).apply { text = "Remove API Key"; visibility = if (p.apiKey.isNotEmpty() && !(isAdminMode || p.controlMode == 2)) View.VISIBLE else View.GONE; setOnClickListener { auth { p.apiKey = ""; apiKey.setText(""); updateUi(); toast("API Key removed") } } }
         container.addView(removeApiKeyBtn)
-
-        container.addView(TextView(this).apply { text = "Administrator Email (Required for support)"; setPadding(0, 16, 0, 4) })
-        adminEmailEt = EditText(this).apply { hint = "admin@example.com"; setText(p.adminEmail); isSingleLine = true }
+        
+        adminSectionLabel = TextView(this).apply { text = "Administrator Settings"; textSize = 18f; setPadding(0, 24, 0, 8) }
+        container.addView(adminSectionLabel)
+        adminEmailLabel = TextView(this).apply { text = "Administrator Email (Required for support)"; setPadding(0, 8, 0, 4) }
+        container.addView(adminEmailLabel)
+        adminEmailEt = EditText(this).apply { hint = "admin@example.com"; setText(p.adminEmail); isSingleLine = true; isEnabled = false; if (Build.VERSION.SDK_INT >= 26) setAutofillHints(View.AUTOFILL_HINT_EMAIL_ADDRESS)
+            setOnClickListener { if (!isEnabled && !isAdminMode && p.controlMode == 2) auth { isEnabled = true; adminPhoneEt.isEnabled = true; requestFocus(); val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager; imm.showSoftInput(this, 0) } } }
         container.addView(adminEmailEt)
-        container.addView(TextView(this).apply { text = "Administrator Phone (Required for support)"; setPadding(0, 16, 0, 4) })
-        adminPhoneEt = EditText(this).apply { hint = "+1234567890"; setText(p.adminPhone); isSingleLine = true; inputType = InputType.TYPE_CLASS_PHONE }
+        adminPhoneLabel = TextView(this).apply { text = "Administrator Phone (Required for support)"; setPadding(0, 16, 0, 4) }
+        container.addView(adminPhoneLabel)
+        adminPhoneEt = EditText(this).apply { hint = "+1234567890"; setText(p.adminPhone); isSingleLine = true; inputType = InputType.TYPE_CLASS_PHONE; isEnabled = false; if (Build.VERSION.SDK_INT >= 26) setAutofillHints(View.AUTOFILL_HINT_PHONE)
+            setOnClickListener { if (!isEnabled && !isAdminMode && p.controlMode == 2) auth { isEnabled = true; adminEmailEt.isEnabled = true; requestFocus(); val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager; imm.showSoftInput(this, 0) } } }
         container.addView(adminPhoneEt)
-
-        saveConfigBtn = Button(this).apply { text = "Save Configuration 🔒"; isEnabled = !isAdminMode
-            setOnClickListener { auth { p.profile = profile.text.toString().trim(); p.manualDeviceName = device.text.toString().trim(); p.useDeviceName = useDeviceNameCb.isChecked; p.adminEmail = adminEmailEt.text.toString().trim(); p.adminPhone = adminPhoneEt.text.toString().trim()
-                    if (apiKey.isEnabled && apiKey.text.isNotEmpty()) p.apiKey = apiKey.text.toString().trim(); toast("Configuration saved"); updateUi() } }
-        }.apply { setPadding(0, 20, 0, 20) }
-        container.addView(saveConfigBtn)
+        
+        saveConfigBtn = Button(this).apply { text = "Save Configuration 🔒"
+            setOnClickListener { auth { 
+                val email = adminEmailEt.text.toString().trim(); val phone = adminPhoneEt.text.toString().trim()
+                val hasEmail = email.isNotEmpty(); val hasPhone = phone.isNotEmpty()
+                if (p.controlMode == 2 && (hasEmail != hasPhone)) { toast("Email and Phone are both required if one is provided"); return@auth }
+                if (p.controlMode == 2 && (!hasEmail || !hasPhone)) { toast("Email and Phone are both mandatory in Admin mode"); return@auth }
+                p.profile = profile.text.toString().trim(); p.manualDeviceName = device.text.toString().trim(); p.useDeviceName = useDeviceNameCb.isChecked; p.adminEmail = email; p.adminPhone = phone
+                if (apiKey.isEnabled && apiKey.text.isNotEmpty()) p.apiKey = apiKey.text.toString().trim(); toast("Configuration saved"); updateUi(); adminEmailEt.isEnabled = false; adminPhoneEt.isEnabled = false
+            } }
+        }.apply { setPadding(0, 20, 0, 20) }; container.addView(saveConfigBtn)
+        
+        adminSwitchBtn = Button(this).apply { 
+            setOnClickListener { 
+                if (p.controlMode == 2) {
+                    auth {
+                        AlertDialog.Builder(this@MainActivity)
+                            .setTitle("Revert to User Control?")
+                            .setMessage("WARNING: All settings will become unlocked and the PIN will be invalidated. Email and Phone data will be removed. Proceed?")
+                            .setPositiveButton("Proceed") { _, _ ->
+                                p.clearPin(); p.adminEmail = ""; p.adminPhone = ""
+                                p.controlMode = 1; buildUi(); updateUi()
+                                toast("Switched to User Control")
+                            }
+                            .setNegativeButton("Cancel", null)
+                            .show()
+                    }
+                } else {
+                    showSetPinDialog { p.controlMode = 2; buildUi(); updateUi(); toast("Now in Admin Control Mode. Contact info required.") }
+                }
+            } 
+        }
+        container.addView(adminSwitchBtn)
         container.addView(Button(this).apply { text = "DNS Activity Counters"; setOnClickListener { showStats() } })
-        pinManageBtn = Button(this).apply { isEnabled = !isAdminMode; setOnClickListener { managePin() } }
-        container.addView(pinManageBtn)
-        setContentView(root); updateUi()
+        pinManageBtn = Button(this).apply { isEnabled = !isAdminMode; setOnClickListener { managePin() } }; container.addView(pinManageBtn); setContentView(root); updateUi()
     }
 
-    private fun createReliabilityRow(label: String, circle: View): View {
-        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(0, 4, 0, 4) }
+    private fun createReliabilityRow(label: String, circle: View): View { val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(0, 4, 0, 4) }
         row.addView(TextView(this).apply { text = label; textSize = 14f; layoutParams = LinearLayout.LayoutParams(0, -2, 1f) })
-        circle.layoutParams = LinearLayout.LayoutParams(24, 24); row.addView(circle); return row
-    }
-
-    private fun updateCircleColor(view: View, colorStr: String) {
-        val shape = GradientDrawable(); shape.shape = GradientDrawable.OVAL; shape.setColor(Color.parseColor(colorStr)); view.background = shape
-    }
-
+        circle.layoutParams = LinearLayout.LayoutParams(24, 24); row.addView(circle); return row }
+    private fun updateCircleColor(view: View, colorStr: String) { val shape = GradientDrawable(); shape.shape = GradientDrawable.OVAL; shape.setColor(Color.parseColor(colorStr)); view.background = shape }
     private fun createRow() = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; layoutParams = LinearLayout.LayoutParams(-1, -2) }
     private fun createGridButton(label: String, onClick: () -> Unit) = Button(this).apply { text = label; layoutParams = LinearLayout.LayoutParams(0, -2, 1f).apply { setMargins(4, 4, 4, 4) }; setOnClickListener { onClick() } }
 
     private fun updateUi() {
-        val ssid = currentSsid(); val effectiveName = p.getEffectiveDeviceName()
-        status.text = "Profile: ${p.profile.ifBlank { "(not set)" }}\nDevice: $effectiveName\nNetwork: ${ssid ?: "Mobile data / Wi-Fi name unavailable"}"
+        val ssid = currentSsid(); val effectiveName = p.getEffectiveDeviceName(); status.text = "Profile: ${p.profile.ifBlank { "(not set)" }}\nDevice: $effectiveName\nNetwork: ${ssid ?: "Mobile data / Wi-Fi name unavailable"}"
         val pm = getSystemService(POWER_SERVICE) as PowerManager; val isBatteryExempt = Build.VERSION.SDK_INT < 23 || pm.isIgnoringBatteryOptimizations(packageName)
         val isAlwaysOn = isAlwaysOnVpnEnabled(); val isOptimal = p.enabled && p.autoStart && p.foregroundService && isBatteryExempt && isAlwaysOn
         systemStatus.text = buildString { append("✓ Constant Polling: NO (Efficient)\n✓ Permanent NextDNS: NO (Standard DoH)\n• Optimal Setup: ${if (isOptimal) "YES" else "NO"}\n")
@@ -250,12 +253,21 @@ class MainActivity : AppCompatActivity() {
         val isSsidExcluded = ssid != null && p.excluded.any { it.equals(ssid, ignoreCase = true) }; val isBypassed = globallyBypassed || isSsidExcluded
         wifiExclusionTv.text = "Wi-Fi Exclusion: ${if (isBypassed) "Excluded" else "Not Excluded"}"; updateCircleColor(wifiExclusionCircle, if (isBypassed) "#4CAF50" else "#9E9E9E")
         setBtnStatus(toggleBtn, p.enabled, true); setBtnStatus(autoStartBtn, p.autoStart, true); setBtnStatus(foregroundBtn, p.foregroundService, true); setBtnStatus(batteryBtn, isBatteryExempt, false); setBtnStatus(alwaysOnBtn, isAlwaysOn, true)
-        val hasKey = p.apiKey.isNotEmpty(); apiKey.isEnabled = !hasKey && p.encryptionWorks && !isAdminMode; apiKeyLayout.alpha = if (apiKey.isEnabled) 1.0f else 0.5f; removeApiKeyBtn.visibility = if (hasKey && p.encryptionWorks && !isAdminMode) View.VISIBLE else View.GONE
+        
+        val isAdmin = p.controlMode == 2 || isAdminMode
+        val vis = if (isAdmin) View.VISIBLE else View.GONE
+        adminSectionLabel.visibility = vis; adminEmailLabel.visibility = vis; adminEmailEt.visibility = vis
+        adminPhoneLabel.visibility = vis; adminPhoneEt.visibility = vis; pinManageBtn.visibility = vis
+        
+        val hasKey = p.apiKey.isNotEmpty(); apiKey.isEnabled = !hasKey && p.encryptionWorks && !isAdmin; apiKeyLayout.alpha = if (apiKey.isEnabled) 1.0f else 0.5f; removeApiKeyBtn.visibility = if (hasKey && p.encryptionWorks && !isAdmin) View.VISIBLE else View.GONE
         if (!p.encryptionWorks) { apiKey.hint = "Security initialization failed"; apiKey.setText("") } else if (hasKey) { apiKey.setText("********"); apiKey.transformationMethod = PasswordTransformationMethod.getInstance() }
         if (p.lastSuccessfulTest > 0) lastTestTv.text = "Last DNS Test: ${SimpleDateFormat("MMM dd, HH:mm", Locale.getDefault()).format(Date(p.lastSuccessfulTest))}"
         else { lastTestTv.text = "Last DNS Test: Never"; updateCircleColor(dnsCheckCircle, "#9E9E9E"); updateCircleColor(browserWarningCircle, "#9E9E9E"); updateCircleColor(connectivityCircle, "#9E9E9E"); updateCircleColor(cloudCircle, "#9E9E9E") }
-        pinManageBtn.text = if (p.pinHash == null) "Set App PIN" else "Manage App PIN 🔒"
-        appExclusionBtn.text = "App Exclusions (${p.excludedApps.size}) 🔒"
+        
+        pinManageBtn.text = if (p.pinHash == null) "Set App PIN" else "Manage App PIN 🔒"; appExclusionBtn.text = "App Exclusions (${p.excludedApps.size}) 🔒"
+        adminSwitchBtn.text = if (p.controlMode == 2) "Change to User Setup" else "Change to Admin-controlled setup"
+        saveConfigBtn.isEnabled = !isAdmin || adminEmailEt.isEnabled
+        if (p.controlMode == 1) { adminEmailEt.alpha = 0.3f; adminPhoneEt.alpha = 0.3f; adminEmailEt.isEnabled = false; adminPhoneEt.isEnabled = false } else { adminEmailEt.alpha = 1.0f; adminPhoneEt.alpha = 1.0f }
     }
 
     private fun setBtnStatus(btn: Button, ok: Boolean, critical: Boolean) {
@@ -279,108 +291,44 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun showSupportOptions() {
-        AlertDialog.Builder(this).setTitle("Support Options")
-            .setItems(arrayOf("General Support Request", "Request App Exclusion")) { _, which ->
-                if (which == 0) contactAdmin("General Support Request") else requestAppExclusion()
-            }.setNegativeButton("Cancel", null).show()
-    }
-
+    private fun showSupportOptions() { AlertDialog.Builder(this).setTitle("Support Options").setItems(arrayOf("General Support Request", "Request App Exclusion")) { _, which -> if (which == 0) contactAdmin("General Support Request") else requestAppExclusion() }.setNegativeButton("Cancel", null).show() }
     private fun manageAppExclusions() {
         val items = p.excludedApps.toList().sorted()
         val adapter = object : ArrayAdapter<String>(this, android.R.layout.simple_list_item_1, items) {
-            override fun getView(pos: Int, v: View?, parent: ViewGroup): View {
-                val tv = super.getView(pos, v, parent) as TextView
-                val pkg = getItem(pos)!!
-                try {
-                    val label = packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0))
-                    tv.text = "$label ($pkg)"
-                } catch (_: Exception) {}
-                return tv
-            }
+            override fun getView(pos: Int, v: View?, parent: ViewGroup): View { val tv = super.getView(pos, v, parent) as TextView; val pkg = getItem(pos)!!; try { val label = packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)); tv.text = "$label ($pkg)" } catch (_: Exception) {}; return tv }
         }
-
         val list = ListView(this).apply { setAdapter(adapter) }
-        val dialog = AlertDialog.Builder(this).setTitle("Manage App Exclusions").setView(list)
-            .setPositiveButton("Add App") { _, _ -> showAppPicker { pkg -> p.excludedApps = p.excludedApps + pkg; updateUi(); manageAppExclusions() } }
-            .setNegativeButton("Close", null).create()
-        
-        list.setOnItemLongClickListener { _, _, pos, _ ->
-            val pkg = items[pos]
-            AlertDialog.Builder(this).setMessage("Remove $pkg from exclusions?").setPositiveButton("Remove") { _, _ ->
-                p.excludedApps = p.excludedApps - pkg; updateUi(); dialog.dismiss(); manageAppExclusions()
-            }.setNegativeButton("Cancel", null).show()
-            true
-        }
+        val dialog = AlertDialog.Builder(this).setTitle("Manage App Exclusions").setView(list).setPositiveButton("Add App") { _, _ -> showAppPicker { pkg -> p.excludedApps = p.excludedApps + pkg; updateUi(); manageAppExclusions() } }.setNegativeButton("Close", null).create()
+        list.setOnItemLongClickListener { _, _, pos, _ -> val pkg = items[pos]; AlertDialog.Builder(this).setMessage("Remove $pkg from exclusions?").setPositiveButton("Remove") { _, _ -> p.excludedApps = p.excludedApps - pkg; updateUi(); dialog.dismiss(); manageAppExclusions() }.setNegativeButton("Cancel", null).show(); true }
         dialog.show()
     }
-
     private fun showAppPicker(onSelected: (String) -> Unit) {
-        val apps = packageManager.getInstalledApplications(0)
-            .filter { (it.flags and ApplicationInfo.FLAG_SYSTEM) == 0 }
-            .sortedBy { packageManager.getApplicationLabel(it).toString() }
-        
+        val apps = packageManager.getInstalledApplications(0).filter { (it.flags and ApplicationInfo.FLAG_SYSTEM) == 0 }.sortedBy { packageManager.getApplicationLabel(it).toString() }
         val labels = apps.map { "${packageManager.getApplicationLabel(it)} (${it.packageName})" }.toTypedArray()
         AlertDialog.Builder(this).setTitle("Select App").setItems(labels) { _, which -> onSelected(apps[which].packageName) }.show()
     }
-
     private fun requestAppExclusion() {
         showAppPicker { pkg ->
-            val appName = try { packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString() } catch (_: Exception) { pkg }
-            val appVer = try { packageManager.getPackageInfo(pkg, 0).versionName } catch (_: Exception) { "unknown" }
-            
+            val appName = try { packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString() } catch (_: Exception) { pkg }; val appVer = try { packageManager.getPackageInfo(pkg, 0).versionName } catch (_: Exception) { "unknown" }
             val reasonEt = EditText(this).apply { hint = "Reason (e.g. payment failure)" }
-            AlertDialog.Builder(this).setTitle("Request Exclusion: $appName").setView(reasonEt)
-                .setPositiveButton("Send Request") { _, _ ->
-                    val reason = reasonEt.text.toString().trim().ifBlank { "None provided" }
-                    val context = "App Exclusion Request: $appName"
-                    val ssid = currentSsid()
-                    val details = buildString {
-                        append("--- App Request ---\n")
-                        append("Application Name: $appName\n")
-                        append("Package: $pkg\n")
-                        append("App Version: $appVer\n")
-                        append("Reason: $reason\n")
-                        append("Requested Action: exclude this application from DNS Router's VPN routing.\n\n")
-                        append("--- System Status ---\n")
-                        append("Device: ${p.getEffectiveDeviceName()}\n")
-                        append("Network: ${ssid ?: "Mobile data / Wi-Fi name unavailable"}\n")
-                        append("NextDNS Profile: ${p.profile}\n")
-                        append("Diagnostics Passed: ${p.lastSuccessfulTest > 0}\n")
-                    }
+            AlertDialog.Builder(this).setTitle("Request Exclusion: $appName").setView(reasonEt).setPositiveButton("Send Request") { _, _ ->
+                    val reason = reasonEt.text.toString().trim().ifBlank { "None provided" }; val context = "App Exclusion Request: $appName"; val ssid = currentSsid()
+                    val details = buildString { append("--- App Request ---\nApplication Name: $appName\nPackage: $pkg\nApp Version: $appVer\nReason: $reason\nRequested Action: exclude this application from DNS Router's VPN routing.\n\n")
+                        append("--- System Status ---\nDevice: ${p.getEffectiveDeviceName()}\nNetwork: ${ssid ?: "Mobile data / Wi-Fi name unavailable"}\nNextDNS Profile: ${p.profile}\nDiagnostics Passed: ${p.lastSuccessfulTest > 0}\n") }
                     contactAdmin(context, details)
                 }.setNegativeButton("Cancel", null).show()
         }
     }
-
     private fun contactAdmin(context: String, customBody: String? = null) {
-        val email = adminEmailEt.text.toString().trim().ifBlank { p.adminEmail }
-        val phone = adminPhoneEt.text.toString().trim().ifBlank { p.adminPhone }
+        val email = adminEmailEt.text.toString().trim().ifBlank { p.adminEmail }; val phone = adminPhoneEt.text.toString().trim().ifBlank { p.adminPhone }
         if (email.isBlank() && phone.isBlank()) { toast("Admin contact info not set"); return }
-
-        val subject = "DNS Router Support: $context"
-        val report = customBody ?: buildString {
-            append("Device: ${p.getEffectiveDeviceName()}\n")
-            append("App Version: ${versionName()}\n")
-            append("Android API: ${Build.VERSION.SDK_INT}\n")
-            append("Profile ID: ${p.profile}\n")
-            append("Protection Enabled: ${p.enabled}\n")
-            val df = SimpleDateFormat("MMM dd, HH:mm", Locale.getDefault())
-            append("Last Test: ${if (p.lastSuccessfulTest > 0) df.format(Date(p.lastSuccessfulTest)) else "Never"}\n")
-            append("\nProblem details:\n")
-        }
-
-        val mailtoUri = "mailto:${Uri.encode(email)}?subject=${Uri.encode(subject)}&body=${Uri.encode(report)}"
-        val emailIntent = Intent(Intent.ACTION_SENDTO, Uri.parse(mailtoUri))
+        val subject = "DNS Router Support: $context"; val report = customBody ?: buildString { append("Device: ${p.getEffectiveDeviceName()}\nApp Version: ${versionName()}\nAndroid API: ${Build.VERSION.SDK_INT}\nProfile ID: ${p.profile}\nProtection Enabled: ${p.enabled}\n")
+            val df = SimpleDateFormat("MMM dd, HH:mm", Locale.getDefault()); append("Last Test: ${if (p.lastSuccessfulTest > 0) df.format(Date(p.lastSuccessfulTest)) else "Never"}\n\nProblem details:\n") }
+        val emailIntent = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:${Uri.encode(email)}?subject=${Uri.encode(subject)}&body=${Uri.encode(report)}"))
         val smsIntent = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$phone")).apply { putExtra("sms_body", report) }
         val fallbackIntent = Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_SUBJECT, subject); putExtra(Intent.EXTRA_TEXT, "$subject\n\n$report") }
-
-        val chooser = Intent.createChooser(fallbackIntent, "Request Assistance via:")
-        val initials = mutableListOf<Intent>()
-        if (email.isNotBlank()) initials.add(emailIntent)
-        if (phone.isNotBlank()) initials.add(smsIntent)
+        val chooser = Intent.createChooser(fallbackIntent, "Request Assistance via:"); val initials = mutableListOf<Intent>(); if (email.isNotBlank()) initials.add(emailIntent); if (phone.isNotBlank()) initials.add(smsIntent)
         if (initials.isNotEmpty()) chooser.putExtra(Intent.EXTRA_INITIAL_INTENTS, initials.toTypedArray())
-        
         try { startActivity(chooser) } catch (e: Exception) { toast("No contact app found") }
     }
 
@@ -396,13 +344,13 @@ class MainActivity : AppCompatActivity() {
     private fun checkBatteryOptimizationOnStartup() { val pm = getSystemService(POWER_SERVICE) as PowerManager; if (Build.VERSION.SDK_INT >= 23 && !pm.isIgnoringBatteryOptimizations(packageName)) { AlertDialog.Builder(this).setTitle("Performance Warning").setMessage("Android may stop DNS Routing in the background if battery optimization is enabled. For reliable automatic DNS Protection, allow DNS Router to run without battery optimization.").setPositiveButton("Disable") { _, _ -> showBatteryDialog() }.setNegativeButton("Later", null).show() } }
     private fun showBatteryDialog() { AlertDialog.Builder(this).setTitle("Background Reliability").setMessage("To prevent the system from killing the VPN service, you must disable battery optimization for DNS Router. On the next screen, find this app and select 'Don't optimize' or 'Unrestricted'.").setPositiveButton("Proceed") { _, _ -> openBatterySettings() }.setNegativeButton("Cancel", null).show() }
     private fun managePin() { if (p.pinHash == null) showSetPinDialog() else auth { AlertDialog.Builder(this).setTitle("Manage PIN").setItems(arrayOf("Change PIN", "Remove PIN")) { _, which -> if (which == 0) showSetPinDialog() else { p.clearPin(); updateUi(); toast("PIN removed") } }.setNegativeButton("Cancel", null).show() } }
-    private fun showSetPinDialog() {
+    private fun showSetPinDialog(onSaved: (() -> Unit)? = null) {
         val container = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(48, 16, 48, 16) }
         val pin1 = EditText(this).apply { inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD; hint = "New PIN (4–12 digits)" }
         val pin2 = EditText(this).apply { inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD; hint = "Verify New PIN" }
         container.addView(pin1); container.addView(pin2)
         AlertDialog.Builder(this).setTitle(if (p.pinHash == null) "Set App PIN" else "Change App PIN").setView(container).setPositiveButton("Save", null).setNegativeButton("Cancel", null).create().apply {
-            setOnShowListener { getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener { val s1 = pin1.text.toString(); val s2 = pin2.text.toString(); if (s1 != s2) toast("PINs do not match") else if (s1.length !in 4..12) toast("PIN must be 4–12 digits") else { p.setPin(s1); toast("PIN saved"); updateUi(); dismiss() } } }
+            setOnShowListener { getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener { val s1 = pin1.text.toString(); val s2 = pin2.text.toString(); if (s1 != s2) toast("PINs do not match") else if (s1.length !in 4..12) toast("PIN must be 4–12 digits") else { p.setPin(s1); toast("PIN saved"); updateUi(); onSaved?.invoke(); dismiss() } } }
         }.show()
     }
     private fun auth(onSuccess: () -> Unit) {
@@ -441,11 +389,7 @@ class MainActivity : AppCompatActivity() {
         if (currentKey.isNotBlank() && currentProfile.isNotBlank()) { kotlin.concurrent.thread { try { val cloudData = fetchNextDnsStats(currentProfile, currentKey); runOnUiThread { if (d.isShowing) d.setMessage("$localText\n\nNEXTDNS CLOUD (Profile: $currentProfile):\n$cloudData") } } catch (_: Exception) {} } } else { d.setMessage("$localText\n\n(API Key and Profile ID required for cloud analytics)") }
     }
     private fun fetchNextDnsStats(profile: String, key: String): String { return try { val url = URL("https://api.nextdns.io/profiles/$profile/analytics/status"); val conn = url.openConnection() as HttpURLConnection; conn.setRequestProperty("X-Api-Key", key); conn.connectTimeout = 10000; conn.readTimeout = 10000; if (conn.responseCode == 200) parseAnalyticsStatus(conn.inputStream.bufferedReader().readText()) else "Error ${conn.responseCode}: ${conn.responseMessage}" } catch (e: Exception) { "Error: ${e.message}" } }
-    private fun parseAnalyticsStatus(json: String): String {
-        val total = Regex("\"totalQueries\":\\s*(\\d+)").find(json)?.groupValues?.get(1) ?: "0"
-        val blocked = Regex("\"blockedQueries\":\\s*(\\d+)").find(json)?.groupValues?.get(1) ?: "0"
-        return "Total Queries: $total\nBlocked: $blocked"
-    }
+    private fun parseAnalyticsStatus(json: String): String { val total = Regex("\"totalQueries\":\\s*(\\d+)").find(json)?.groupValues?.get(1) ?: "0"; val blocked = Regex("\"blockedQueries\":\\s*(\\d+)").find(json)?.groupValues?.get(1) ?: "0"; return "Total Queries: $total\nBlocked: $blocked" }
     private fun showSetup() { AlertDialog.Builder(this).setTitle("Always-On VPN Protection").setMessage("Highly Recommended: Enabling 'Always-on VPN' in Android settings ensures DNS Router is automatically managed by the system.\n\nRisk: If NOT enabled, DNS queries may bypass NextDNS during network transitions or if the app is stopped.\n\nOptional: 'Block connections without VPN' provides strict protection by disabling internet if the VPN is not connected.").setPositiveButton("Open Settings") { _, _ -> try { startActivity(Intent(Settings.ACTION_VPN_SETTINGS)) } catch (_: Exception) {} }.setNegativeButton("Close", null).show() }
     private fun openBatterySettings() { try { startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).setData(Uri.parse("package:$packageName"))) } catch (_: Exception) { startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) } }
     private fun requestWifiPermission() { if (Build.VERSION.SDK_INT >= 23 && ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) { locationPermission.launch(Manifest.permission.ACCESS_FINE_LOCATION) } else { checkBatteryOptimizationOnStartup() } }

@@ -1,6 +1,12 @@
-# DNS Router for Android - v1.97
+# DNS Router for Android - v1.98
 
 Native Kotlin Android app implementing a **DNS-only** `VpnService` that forwards intercepted UDP DNS packets to a configurable NextDNS DoH endpoint. Normal Internet traffic is not routed through the VPN.
+
+## v1.98 changes
+- **Setup Control Modes**: Added a mandatory choice between "Personal" and "Network Admin" control on first launch.
+- **Admin Field Security**: Administrator contact fields are now locked by default and require PIN authentication to edit.
+- **Enhanced Contact Validation**: In Admin mode, both Email and Phone Number are mandatory and co-dependent.
+- **Keyboard & UI Polish**: Improved layout handling to keep fields visible during text entry and fixed autofill issues on the Profile ID.
 
 ## v1.97 changes
 - **App Exclusions**: Administrators can now whitelist specific applications from VPN routing via a PIN-protected management screen.
