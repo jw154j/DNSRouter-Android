@@ -71,9 +71,12 @@ class Prefs(private val ctx: Context) {
     var pinSalt: String? get() = f.getString("pin_salt", null); private set(v) = f.edit().putString("pin_salt", v).apply()
     
     var excluded: Set<String> get() = f.getStringSet("excluded", emptySet()) ?: emptySet(); set(v) = f.edit().putStringSet("excluded", v).apply()
+    var excludedApps: Set<String> get() = f.getStringSet("excluded_apps", emptySet()) ?: emptySet(); set(v) = f.edit().putStringSet("excluded_apps", v).apply()
 
     var lastVersionCode: Int get() = f.getInt("last_vc", 0); set(v) = f.edit().putInt("last_vc", v).apply()
     var lastSuccessfulTest: Long get() = f.getLong("last_test", 0); set(v) = f.edit().putLong("last_test", v).apply()
+    var adminEmail: String get() = f.getString("admin_email", "") ?: ""; set(v) = f.edit().putString("admin_email", v).apply()
+    var adminPhone: String get() = f.getString("admin_phone", "") ?: ""; set(v) = f.edit().putString("admin_phone", v).apply()
 
     fun checkPin(pin: String): Boolean {
         val salt = pinSalt ?: return false
@@ -84,6 +87,16 @@ class Prefs(private val ctx: Context) {
         val salt = ByteArray(16).also { SecureRandom().nextBytes(it) }
         pinSalt = Base64.encodeToString(salt, Base64.NO_WRAP)
         pinHash = hash(pin, salt)
+    }
+
+    fun clearPin() {
+        pinSalt = null
+        pinHash = null
+    }
+
+    fun resetAll() {
+        f.edit().clear().apply()
+        if (encryptionWorks) p.edit().clear().apply()
     }
 
     private fun hash(s: String, salt: ByteArray): String {

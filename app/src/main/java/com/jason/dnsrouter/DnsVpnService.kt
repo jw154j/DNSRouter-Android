@@ -68,6 +68,10 @@ class DnsVpnService : VpnService() {
             .addAddress(TUN_V6, 128)
             .addRoute(DNS_V4, 32)
             .addRoute(DNS_V6, 128)
+        
+        prefs.excludedApps.forEach { 
+            try { b.addDisallowedApplication(it) } catch (_: Exception) {} 
+        }
         if (!bypass) {
             b.addDnsServer(DNS_V4)
             b.addDnsServer(DNS_V6)

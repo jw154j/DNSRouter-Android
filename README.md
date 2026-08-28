@@ -1,8 +1,37 @@
-# DNS Router for Android - v1.9
+# DNS Router for Android - v1.97
 
 Native Kotlin Android app implementing a **DNS-only** `VpnService` that forwards intercepted UDP DNS packets to a configurable NextDNS DoH endpoint. Normal Internet traffic is not routed through the VPN.
 
-## v1.9 changes
+## v1.97 changes
+- **App Exclusions**: Administrators can now whitelist specific applications from VPN routing via a PIN-protected management screen.
+- **Structured Exclusion Requests**: Users can select installed apps and send detailed exclusion requests to their administrator, including application metadata and diagnostic results.
+- **VPN Bypass Integration**: The service now dynamically excludes whitelisted apps using the `addDisallowedApplication` system API.
+
+## v1.96 changes
+- **Intelligent Multi-Channel Support**: Support requests now use structured data "traunches." Selecting an email app prepopulates Email/Subject/Body, while selecting a messaging app prepopulates Phone/Message. Standard sharing serves as a universal fallback.
+
+## v1.95 changes
+- **Unified Support Share Sheet**: Administrator contact now uses the native Android Share sheet, allowing users to choose between Email, SMS, or other messaging apps.
+- **Multi-Channel Prepopulation**: Automatically fills Admin Email/Subject (for email) or Phone Number (for SMS) along with a full diagnostic report in the message body.
+- **v2.0 Infrastructure**: Established the foundation for upcoming domain allowlist and app exclusion request workflows.
+
+## v1.94 changes
+- **Network Admin Mode**: Automatically restricts user capabilities when the app is managed via MDM/Managed Configurations.
+- **Admin Read-Only UI**: Core settings become read-only in Admin Mode to prevent unauthorized modifications.
+- **Managed Support Integration**: Added a "Support" feature that allows users to email their administrator with prepopulated diagnostic data.
+- **Contextual Support Requests**: "Forgot PIN" and support buttons automatically include device and app status in help requests.
+
+## v1.93 changes
+- **Forgot PIN Workflows**: Added a new workflow for forgotten PINs. Personal users can perform a full app reset, while managed users (Enterprise/MDM) are directed to contact their administrator.
+- **Factory Reset**: Introduced a secure way to wipe all app data and settings to recover access.
+
+## v1.92 changes
+- **Optional App PIN**: The application PIN is no longer mandatory on first launch.
+- **Secure PIN Lifecycle**: Setting or changing a PIN now requires a "Verify PIN" step.
+- **PIN Authorization**: Changing or removing an existing PIN now requires the current PIN for authorization.
+- **Layout Refinement**: Fixed bottom button accessibility for system navigation bars.
+
+## v1.91 changes
 - **Security Diagnostics & Leak Detection**: Integrated an active testing suite to verify DNS interception and detect bypasses.
 - **Active Bypass Warnings**: The app now warns users if a DNS request expected to go through NextDNS did not, helping identify "Secure DNS" browser leaks.
 - **Cloud Verification**: (API users only) Real-time verification that queries are appearing in NextDNS cloud logs.
