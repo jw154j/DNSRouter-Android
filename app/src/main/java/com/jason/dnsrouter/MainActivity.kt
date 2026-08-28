@@ -292,9 +292,10 @@ class MainActivity : AppCompatActivity() {
         row2.addView(foregroundBtn); row2.addView(batteryBtn); grid.addView(row2)
         container.addView(TextView(this).apply { text = "Note: Foreground service keeps the DNS protection active but does not mean the app screen is running."; textSize = 11f; alpha = 0.6f; setPadding(8, 0, 8, 0) })
         val row3 = createRow()
-        alwaysOnBtn = createGridButton("Always-On VPN (Inc. Lockdown)") { auth { showSetup() } }
+        alwaysOnBtn = createGridButton("Always-On & Lockdown") { auth { showSetup() } }
         wifiExclusionBtn = createGridButton("Wi-Fi Excl.") { auth { if (isAdminMode || p.controlMode == 2) { toast("Managed by Administrator"); return@auth }; editExclusions() } }
-        row3.addView(alwaysOnBtn); row3.addView(wifiExclusionBtn); grid.addView(row3); container.addView(grid)
+        row3.addView(alwaysOnBtn); row3.addView(wifiExclusionBtn); grid.addView(row3)
+        container.addView(grid)
         
         appExclusionBtn = Button(this).apply { text = "App Exclusions"; setOnClickListener { auth { manageAppExclusions() } } }
         container.addView(appExclusionBtn)
@@ -687,10 +688,7 @@ class MainActivity : AppCompatActivity() {
         AlertDialog.Builder(this).setTitle("Wi-Fi Exclusions").setView(container).setNegativeButton("Cancel", null).setPositiveButton("Save") { _, _ -> p.excluded = e.text.toString().lines().map { it.trim() }.filter { it.isNotEmpty() }.toSet(); toast("Saved"); updateUi() }.show()
     }
     private fun showStats() {
-        val s = DnsStats(this); val localText = "LOCAL COUNTERS:\nQueries captured: ${s.get("queries")}\nResponses sent: ${s.get("responses")}\nErrors: ${s.get("errors")}\nNXDOMAIN: ${s.get("nxdomain")}\nSERVFAIL: ${s.get("servfail")}"
-        val d = AlertDialog.Builder(this).setTitle("DNS Activity").setMessage("$localText\n\nFetching NextDNS cloud analytics...").setPositiveButton("OK", null).setNeutralButton("Clear Local") { _, _ -> s.clear(); toast("Local statistics cleared") }.create(); d.show()
-        val currentKey = p.apiKey; val currentProfile = p.profile
-        if (currentKey.isNotBlank() && currentProfile.isNotBlank()) { kotlin.concurrent.thread { try { val cloudData = fetchNextDnsStats(currentProfile, currentKey); runOnUiThread { if (d.isShowing) d.setMessage("$localText\n\nNEXTDNS CLOUD (Profile: $currentProfile):\n$cloudData") } } catch (_: Exception) {} } } else { d.setMessage("$localText\n\n(API Key and Profile ID required for cloud analytics)") }
+        startActivity(Intent(this, DnsActivity::class.java))
     }
     private fun fetchNextDnsStats(profile: String, key: String): String { return try { val url = URL("https://api.nextdns.io/profiles/$profile/analytics/status"); val conn = url.openConnection() as HttpURLConnection; conn.setRequestProperty("X-Api-Key", key); conn.connectTimeout = 10000; conn.readTimeout = 10000; if (conn.responseCode == 200) parseAnalyticsStatus(conn.inputStream.bufferedReader().readText()) else "Error ${conn.responseCode}: ${conn.responseMessage}" } catch (e: Exception) { "Error: ${e.message}" } }
     private fun parseAnalyticsStatus(json: String): String { val total = Regex("\"totalQueries\":\\s*(\\d+)").find(json)?.groupValues?.get(1) ?: "0"; val blocked = Regex("\"blockedQueries\":\\s*(\\d+)").find(json)?.groupValues?.get(1) ?: "0"; return "Total Queries: $total\nBlocked: $blocked" }

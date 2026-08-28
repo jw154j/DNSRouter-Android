@@ -233,34 +233,65 @@ class DnsVpnService : VpnService() {
     }
 
     private fun handleDns(q: UdpQuery, output: OutputStream) {
+        val domain = parseDomainName(q.dns) ?: "unknown"
         stats.inc("queries")
+        
         // Check for diagnostic test domain: diag.dnsrouter.check
-        if (q.dns.size > 30) {
-            val s = String(q.dns, StandardCharsets.US_ASCII)
-            if (s.contains("diag") && s.contains("dnsrouter") && s.contains("check")) {
-                stats.inc("test_seen")
-                Log.i("DnsVpn", "Diagnostic test query detected!")
-            }
+        if (domain.contains("diag.dnsrouter.check")) {
+            stats.inc("test_seen")
+            Log.i("DnsVpn", "Diagnostic test query detected!")
         }
+
         try {
             val response = dohQuery(q.dns)
             if (response == null) {
                 stats.inc("errors")
+                stats.logQuery(domain, "failed")
                 return
             }
             val rcode = if (response.size >= 4) response[3].toInt() and 0x0F else -1
+            
+            val status = when (rcode) {
+                0 -> "allowed"
+                3 -> "blocked" // NXDOMAIN often means blocked by NextDNS
+                else -> "failed"
+            }
+            
             if (rcode == 3) stats.inc("nxdomain")
             if (rcode == 2) stats.inc("servfail")
             stats.inc("responses")
+            
+            stats.logQuery(domain, status)
+
             val packet = if (q.ipv6) buildUdp6Response(q, response) else buildUdp4Response(q, response)
             synchronized(output) {
                 output.write(packet)
                 output.flush()
             }
-            Log.v("DnsVpn", "DNS response sent: RCODE=$rcode")
+            Log.v("DnsVpn", "DNS response sent: RCODE=$rcode domain=$domain status=$status")
         } catch (e: Exception) {
             Log.e("DnsVpn", "Error handling DNS", e)
             stats.inc("errors")
+            stats.logQuery(domain, "failed")
+        }
+    }
+
+    private fun parseDomainName(dns: ByteArray): String? {
+        if (dns.size < 12) return null
+        val sb = StringBuilder()
+        var pos = 12
+        try {
+            while (pos < dns.size) {
+                val len = dns[pos].toInt() and 0xFF
+                if (len == 0) break
+                if (pos + 1 + len > dns.size) return null
+                if (sb.isNotEmpty()) sb.append('.')
+                sb.append(String(dns, pos + 1, len, StandardCharsets.US_ASCII))
+                pos += 1 + len
+            }
+            return sb.toString()
+        } catch (_: Exception) {
+            return null
         }
     }
 
