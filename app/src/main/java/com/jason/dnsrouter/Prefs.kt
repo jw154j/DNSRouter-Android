@@ -8,9 +8,9 @@ import java.security.SecureRandom
 class Prefs(ctx: Context) {
     private val p = ctx.getSharedPreferences("config", Context.MODE_PRIVATE)
 
-    var profile: String get() = p.getString("profile", "da8163") ?: "da8163"; set(v) = p.edit().putString("profile", v).apply()
-    var apiKey: String get() = p.getString("api_key", "d1381a6f7375eb904b22cd8cbb86ee711626cb61") ?: "d1381a6f7375eb904b22cd8cbb86ee711626cb61"; set(v) = p.edit().putString("api_key", v).apply()
-    var deviceName: String get() = p.getString("device", "Jesse's A16 5G") ?: "Jesse's A16 5G"; set(v) = p.edit().putString("device", v).apply()
+    var profile: String get() = p.getString("profile", "") ?: ""; set(v) = p.edit().putString("profile", v).apply()
+    var apiKey: String get() = p.getString("api_key", "") ?: ""; set(v) = p.edit().putString("api_key", v).apply()
+    var deviceName: String get() = p.getString("device", "Android") ?: "Android"; set(v) = p.edit().putString("device", v).apply()
     var enabled: Boolean get() = p.getBoolean("enabled", true); set(v) = p.edit().putBoolean("enabled", v).apply()
     var autoStart: Boolean get() = p.getBoolean("autostart", true); set(v) = p.edit().putBoolean("autostart", v).apply()
     var pinHash: String? get() = p.getString("pin_hash", null); private set(v) = p.edit().putString("pin_hash", v).apply()

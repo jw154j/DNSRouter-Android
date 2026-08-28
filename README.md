@@ -16,10 +16,8 @@ Native Kotlin Android app implementing a **DNS-only** `VpnService` that forwards
 - Clear statement that NextDNS blocked-query counts require NextDNS logs API access rather than guessing from response codes.
 - NextDNS profile/device are editable independently.
 
-## Default configuration
-Profile: `da8163`
-Device: `Jesse's A16 5G`
-Generated endpoint: `https://dns.nextdns.io/da8163/Jesse%27s%20A16%205G`
+## Configuration
+The app requires a NextDNS Profile ID to function. You can also optionally provide an API Key for cloud analytics and a Device Name for logs. All configuration is stored strictly on-device.
 
 ## Important Android behavior
 Android does not permit an ordinary app to silently enable the system **Always-on VPN** setting. The user must authorize DNS Router in Android VPN settings once. Android then maintains the Always-on state.
