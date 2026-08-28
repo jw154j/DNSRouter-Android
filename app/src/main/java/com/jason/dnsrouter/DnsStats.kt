@@ -3,6 +3,7 @@ package com.jason.dnsrouter
 import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
+import androidx.core.content.edit
 
 class DnsStats(ctx: Context) {
     private val p = ctx.getSharedPreferences("stats", Context.MODE_PRIVATE)
@@ -13,7 +14,7 @@ class DnsStats(ctx: Context) {
     fun inc(key: String) = synchronized(this) {
         val current = p.getLong(key, 0)
         val next = current + 1
-        p.edit().putLong(key, next).apply()
+        p.edit { putLong(key, next) }
     }
 
     fun get(key: String) = p.getLong(key, 0)
@@ -31,7 +32,7 @@ class DnsStats(ctx: Context) {
             obj.put("t", it.timestamp)
             array.put(obj)
         }
-        logPref.edit().putString("log", array.toString()).apply()
+        logPref.edit { putString("log", array.toString())}
     }
 
     fun getQueryLog(): List<QueryRecord> {
@@ -47,6 +48,6 @@ class DnsStats(ctx: Context) {
 
     fun clear() {
         p.edit().clear().apply()
-        logPref.edit().clear().apply()
+        logPref.edit {clear()}
     }
 }

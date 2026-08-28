@@ -1,5 +1,4 @@
 <resources>
-    <string name="app_name">DNS Router</string>
     <string name="dns_activity_log">DNS Activity Log</string>
     <string name="clear_log">Clear Log</string>
     <string name="refresh">Refresh</string>

@@ -148,7 +148,7 @@ class MainActivity : AppCompatActivity() {
         // User Setup Option
         val userBtn = Button(this).apply {
             text = getString(R.string.user_setup_text); textSize = 18f
-            setPadding(40, 60, 40, 60); setAllCaps(true)
+            setPadding(40, 60, 40, 60); isAllCaps = true
             val btnColor = if (isDark) "#2C2C2C" else "#E0E0E0"
             setBackgroundColor(btnColor.toColorInt())
             setTextColor(if (isDark) Color.WHITE else Color.BLACK)
@@ -167,7 +167,7 @@ class MainActivity : AppCompatActivity() {
         // Admin Setup Option
         val adminBtn = Button(this).apply {
             text = getString(R.string.admin_setup_text); textSize = 18f
-            setPadding(40, 60, 40, 60); setAllCaps(true)
+            setPadding(40, 60, 40, 60); isAllCaps = true
             val btnColor = if (isDark) "#1976D2" else "#BBDEFB"
             setBackgroundColor(btnColor.toColorInt())
             setTextColor(if (isDark) Color.WHITE else Color.BLACK)
@@ -545,8 +545,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setBtnStatus(btn: Button, ok: Boolean, critical: Boolean) {
-        if (ok) { btn.setBackgroundColor(Color.parseColor("#4CAF50")); btn.setTextColor(Color.WHITE) }
-        else { btn.setBackgroundColor(if (critical) Color.parseColor("#F44336") else Color.parseColor("#FFC107")); btn.setTextColor(if (critical) Color.WHITE else Color.BLACK) }
+        if (ok) { btn.setBackgroundColor("#4CAF50".toColorInt()); btn.setTextColor(Color.WHITE) }
+        else { btn.setBackgroundColor(if (critical) "#F44336".toColorInt() else "#FFC107".toColorInt()); btn.setTextColor(if (critical) Color.WHITE else Color.BLACK) }
     }
 
     private fun runSecurityTests() {

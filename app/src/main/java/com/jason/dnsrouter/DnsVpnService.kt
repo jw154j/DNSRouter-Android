@@ -467,10 +467,8 @@ class DnsVpnService : VpnService() {
     }
 
     private fun createNotificationChannels() {
-        if (Build.VERSION.SDK_INT >= 26) {
-            nm.createNotificationChannel(NotificationChannel("dns", "Service Status", NotificationManager.IMPORTANCE_LOW))
-            nm.createNotificationChannel(NotificationChannel(CHAN_ID, "Security Alerts", NotificationManager.IMPORTANCE_HIGH))
-        }
+        nm.createNotificationChannel(NotificationChannel("dns", "Service Status", NotificationManager.IMPORTANCE_LOW))
+        nm.createNotificationChannel(NotificationChannel(CHAN_ID, "Security Alerts", NotificationManager.IMPORTANCE_HIGH))
     }
 
     private fun parseDomainName(dns: ByteArray): String? {
