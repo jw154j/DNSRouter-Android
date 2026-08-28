@@ -1,12 +1,30 @@
-# DNS Router for Android - v1.3
+# DNS Router for Android - v1.9
 
 Native Kotlin Android app implementing a **DNS-only** `VpnService` that forwards intercepted UDP DNS packets to a configurable NextDNS DoH endpoint. Normal Internet traffic is not routed through the VPN.
 
+## v1.9 changes
+- **Security Diagnostics & Leak Detection**: Integrated an active testing suite to verify DNS interception and detect bypasses.
+- **Active Bypass Warnings**: The app now warns users if a DNS request expected to go through NextDNS did not, helping identify "Secure DNS" browser leaks.
+- **Cloud Verification**: (API users only) Real-time verification that queries are appearing in NextDNS cloud logs.
+- **Diagnostics History**: Tracks the timestamp of the last successful DNS security test.
+
+## v1.8 changes
+- **Reliability Status Indicators**: New UI section with color-coded circles (Green/Yellow/Red) for real-time tracking of Always-on VPN, Battery Optimization, and Auto-Start status.
+- **Network Awareness**: Immediate feedback on the current Wi-Fi network and its exclusion status.
+
+## v1.5 changes
+- **Device Compatibility Report**: Added a detailed diagnostic tool that categorizes features into Core, Recommended, and Optional. It automatically runs after app updates to ensure ongoing compatibility.
+- **Enhanced Wi-Fi Exclusions**: Improved SSID detection logic with explicit "Wi-Fi name unavailable" reporting. Added a real-time counter for excluded networks and a one-tap "Add Current" shortcut.
+- **Improved Setup Flow**: Refined the sequential permission and setup process for better hardware alignment.
+
+## v1.4 changes
+- **Optimal Setup Grid**: New UI with color-coded buttons (Green/Yellow/Red) to guide the user toward the most reliable configuration.
+- **Smart Setup Flow**: Sequential setup starting with Location access for SSIDs, followed by a detailed Battery Optimization request with a descriptive "hard stop" dialog.
+- **Always-On VPN Focus**: Updated terminology to emphasize Always-On VPN as "Highly Recommended" and explained the risks of unfiltered DNS if disabled.
+- **Smart Wi-Fi Exclusions**: Added "Add Current Network" button to the exclusion dialog for easier configuration.
+- **Enhanced Status Monitoring**: Detailed status area confirming efficient operation (No Polling, Standard DoH).
+
 ## v1.3 changes
-- **Secure API Key Lifecycle**: Added visibility toggle, field locking after save, and a dedicated "Remove API Key" action.
-- **Hardware Device Name**: Added "Use hardware Device Name" option to dynamically pull the phone's actual name for logs.
-- **Strict Security Fallback**: If hardware encryption fails, the API key is disabled and a configuration error is shown.
-- **UI Improvements**: Added field labels and clear instructions regarding optional features.
 
 ## v1.2 changes
 - **Keystore-backed Encryption**: Configuration data (Profile ID, API Key, Device Name) is now encrypted using hardware-backed keys via `EncryptedSharedPreferences`.

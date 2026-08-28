@@ -83,7 +83,7 @@ class DnsVpnService : VpnService() {
         }
         tun = localTun
         running = true
-        startForegroundCompat(if (bypass) "Excluded Wi-Fi: DNS bypass" else "NextDNS DNS protection active")
+        startForegroundCompat(if (bypass) "Excluded Network: DNS bypass" else "NextDNS DNS protection active")
         thread(name = "dns-tun") { packetLoop(localTun) }
     }
 
@@ -99,26 +99,36 @@ class DnsVpnService : VpnService() {
     }
 
     private fun onNetworkChanged() {
-        val newBypass = isExcludedWifi()
+        val newBypass = shouldBypass()
         if (newBypass != bypass) {
             bypass = newBypass
             rebuildTunnel()
         } else {
-            startForegroundCompat(if (bypass) "Excluded Wi-Fi: DNS bypass" else "NextDNS DNS protection active")
+            startForegroundCompat(if (bypass) "Excluded Network: DNS bypass" else "NextDNS DNS protection active")
         }
     }
 
     private fun evaluateNetwork() {
-        bypass = isExcludedWifi()
+        bypass = shouldBypass()
         Log.d("DnsVpn", "Evaluate network: bypass=$bypass")
     }
 
-    private fun isExcludedWifi(): Boolean {
-        val network = cm.activeNetwork ?: return false
-        val caps = cm.getNetworkCapabilities(network) ?: return false
-        if (!caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) return false
-        val ssid = wifiSsid(caps) ?: return false
-        return prefs.excluded.any { it.equals(ssid, ignoreCase = true) }
+    private fun shouldBypass(): Boolean {
+        val network = cm.activeNetwork ?: return true
+        val caps = cm.getNetworkCapabilities(network) ?: return true
+        
+        if (caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) {
+            if (!prefs.protectMobile) return true
+        } else if (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
+            if (!prefs.protectWifi) return true
+            val ssid = wifiSsid(caps) ?: return false
+            return prefs.excluded.any { it.equals(ssid, ignoreCase = true) }
+        } else {
+            // Other transports like Ethernet, USB, etc.
+            if (!prefs.protectOther) return true
+        }
+        
+        return false
     }
 
     @Suppress("DEPRECATION")
@@ -220,6 +230,14 @@ class DnsVpnService : VpnService() {
 
     private fun handleDns(q: UdpQuery, output: OutputStream) {
         stats.inc("queries")
+        // Check for diagnostic test domain: diag.dnsrouter.check
+        if (q.dns.size > 30) {
+            val s = String(q.dns, StandardCharsets.US_ASCII)
+            if (s.contains("diag") && s.contains("dnsrouter") && s.contains("check")) {
+                stats.inc("test_seen")
+                Log.i("DnsVpn", "Diagnostic test query detected!")
+            }
+        }
         try {
             val response = dohQuery(q.dns)
             if (response == null) {
@@ -365,6 +383,10 @@ class DnsVpnService : VpnService() {
     private fun fold(value: Long): Int { var s = value; while (s ushr 16 != 0L) s = (s and 65535) + (s ushr 16); return s.inv().toInt() and 65535 }
 
     private fun startForegroundCompat(text: String) {
+        if (!prefs.foregroundService) {
+            Log.w("DnsVpn", "Foreground service disabled by user. VPN may be unstable.")
+            return
+        }
         val n = Notification.Builder(this, "dns")
             .setContentTitle("DNS Router").setContentText(text).setSmallIcon(android.R.drawable.stat_sys_warning).setOngoing(true).build()
         if (Build.VERSION.SDK_INT >= 29) startForeground(7, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE) else startForeground(7, n)

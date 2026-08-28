@@ -7,8 +7,8 @@ android {
         applicationId = "com.jason.dnsrouter"
         minSdk = 29
         targetSdk = 35
-        versionCode = 4
-        versionName = "1.3"
+        versionCode = 9
+        versionName = "1.9"
     }
 }
 

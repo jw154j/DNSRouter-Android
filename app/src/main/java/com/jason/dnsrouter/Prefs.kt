@@ -62,11 +62,18 @@ class Prefs(private val ctx: Context) {
 
     var enabled: Boolean get() = f.getBoolean("enabled", false); set(v) = f.edit().putBoolean("enabled", v).apply()
     var autoStart: Boolean get() = f.getBoolean("autostart", true); set(v) = f.edit().putBoolean("autostart", v).apply()
+    var foregroundService: Boolean get() = f.getBoolean("foreground", true); set(v) = f.edit().putBoolean("foreground", v).apply()
+    var protectWifi: Boolean get() = f.getBoolean("protect_wifi", false); set(v) = f.edit().putBoolean("protect_wifi", v).apply()
+    var protectMobile: Boolean get() = f.getBoolean("protect_mobile", false); set(v) = f.edit().putBoolean("protect_mobile", v).apply()
+    var protectOther: Boolean get() = f.getBoolean("protect_other", false); set(v) = f.edit().putBoolean("protect_other", v).apply()
     
     var pinHash: String? get() = f.getString("pin_hash", null); private set(v) = f.edit().putString("pin_hash", v).apply()
     var pinSalt: String? get() = f.getString("pin_salt", null); private set(v) = f.edit().putString("pin_salt", v).apply()
     
     var excluded: Set<String> get() = f.getStringSet("excluded", emptySet()) ?: emptySet(); set(v) = f.edit().putStringSet("excluded", v).apply()
+
+    var lastVersionCode: Int get() = f.getInt("last_vc", 0); set(v) = f.edit().putInt("last_vc", v).apply()
+    var lastSuccessfulTest: Long get() = f.getLong("last_test", 0); set(v) = f.edit().putLong("last_test", v).apply()
 
     fun checkPin(pin: String): Boolean {
         val salt = pinSalt ?: return false
