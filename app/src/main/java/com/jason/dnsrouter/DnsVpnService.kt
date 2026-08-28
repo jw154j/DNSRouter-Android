@@ -38,7 +38,7 @@ class DnsVpnService : VpnService() {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
-        Log.i("DnsVpn", "Service created. Profile=${prefs.profile} Device=${prefs.deviceName}")
+        Log.i("DnsVpn", "Service created. Profile=${prefs.profile} Device=${prefs.getEffectiveDeviceName()}")
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -247,7 +247,8 @@ class DnsVpnService : VpnService() {
         val host = "dns.nextdns.io"
         val profile = prefs.profile.trim().trim('/')
         if (profile.isEmpty()) return null
-        val device = prefs.deviceName.replace(Regex("[^a-zA-Z0-9_-]"), "-")
+        val deviceName = prefs.getEffectiveDeviceName()
+        val device = urlPathSegment(deviceName)
         val path = if (device.isEmpty()) "/$profile" else "/$profile/$device"
         
         // Use Anycast IPs directly first to avoid resolution loops.

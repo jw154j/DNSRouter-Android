@@ -9,7 +9,9 @@ import android.os.*
 import android.provider.Settings
 import android.net.Uri
 import android.text.InputType
+import android.text.method.PasswordTransformationMethod
 import android.util.Log
+import android.view.View
 import android.widget.*
 import java.net.HttpURLConnection
 import java.net.URL
@@ -25,6 +27,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var profile: EditText
     private lateinit var apiKey: EditText
     private lateinit var device: EditText
+    private lateinit var useDeviceNameCb: CheckBox
+    private lateinit var apiKeyLayout: LinearLayout
+    private lateinit var removeApiKeyBtn: Button
+    
     private val vpnResult = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { if (it.resultCode == RESULT_OK) startVpn() }
     private val locationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { updateUi() }
 
@@ -37,36 +43,120 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() { super.onResume(); updateUi() }
 
     private fun buildUi() {
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(32, 28, 32, 28) }
-        root.addView(TextView(this).apply { text = "DNS Router"; textSize = 30f })
-        status = TextView(this).apply { textSize = 16f; setPadding(0, 12, 0, 12) }; root.addView(status)
-        protection = TextView(this).apply { textSize = 14f; setPadding(0, 0, 0, 16) }; root.addView(protection)
+        val root = ScrollView(this).apply { isFillViewport = true }
+        val container = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(32, 28, 32, 28) }
+        root.addView(container)
+        
+        container.addView(TextView(this).apply { text = "DNS Router"; textSize = 30f })
+        status = TextView(this).apply { textSize = 16f; setPadding(0, 12, 0, 12) }; container.addView(status)
+        protection = TextView(this).apply { textSize = 14f; setPadding(0, 0, 0, 16) }; container.addView(protection)
+        
         toggle = Switch(this).apply {
             text = "DNS protection (PIN required)"; isChecked = p.enabled
             setOnClickListener { val desired = isChecked; auth { p.enabled = desired; if (desired) requestVpn() else stopVpn(); updateUi() } }
-        }; root.addView(toggle)
+        }; container.addView(toggle)
 
-        profile = EditText(this).apply { hint = "NextDNS profile ID"; setText(p.profile); isSingleLine = true }
-        root.addView(profile)
-        apiKey = EditText(this).apply { hint = "NextDNS API Key"; setText(p.apiKey); isSingleLine = true; inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD }
-        root.addView(apiKey)
-        device = EditText(this).apply { hint = "Device name"; setText(p.deviceName); isSingleLine = true }
-        root.addView(device)
-        root.addView(Button(this).apply { text = "Save NextDNS settings 🔒"; setOnClickListener { auth { p.profile = profile.text.toString().trim(); p.apiKey = apiKey.text.toString().trim(); p.deviceName = device.text.toString().trim(); toast("Saved"); updateUi() } } })
-        root.addView(Button(this).apply { text = "Wi-Fi exclusions 🔒"; setOnClickListener { auth { editExclusions() } } })
-        root.addView(Button(this).apply { text = "DNS activity"; setOnClickListener { showStats() } })
-        root.addView(Button(this).apply { text = "Protection setup"; setOnClickListener { showSetup() } })
-        root.addView(Button(this).apply { text = "Change PIN 🔒"; setOnClickListener { auth { setupPin(first = false) } } })
-        root.addView(Button(this).apply { text = "Battery optimization"; setOnClickListener { openBatterySettings() } })
+        container.addView(TextView(this).apply { text = "NextDNS Profile ID"; setPadding(0, 16, 0, 4) })
+        profile = EditText(this).apply { hint = "e.g. da8163"; setText(p.profile); isSingleLine = true }
+        container.addView(profile)
+
+        container.addView(TextView(this).apply { text = "Device Name"; setPadding(0, 16, 0, 4) })
+        device = EditText(this).apply { 
+            hint = "e.g. My Phone"; setText(p.manualDeviceName); isSingleLine = true
+            visibility = if (p.useDeviceName) View.GONE else View.VISIBLE
+        }
+        container.addView(device)
+        
+        useDeviceNameCb = CheckBox(this).apply {
+            text = "Use this device's name"; isChecked = p.useDeviceName
+            setOnCheckedChangeListener { _, isChecked -> 
+                device.visibility = if (isChecked) View.GONE else View.VISIBLE
+            }
+        }
+        container.addView(useDeviceNameCb)
+
+        container.addView(TextView(this).apply { text = "API Key (optional)"; setPadding(0, 16, 0, 4) })
+        container.addView(TextView(this).apply { 
+            text = "Enables cloud analytics and logs in this app. If omitted, only local device counters are shown."; 
+            textSize = 12f; alpha = 0.7f; setPadding(0, 0, 0, 8) 
+        })
+        
+        apiKeyLayout = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        apiKey = EditText(this).apply { 
+            hint = "NextDNS API Key"; setText(p.apiKey); isSingleLine = true
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        val showKeyBtn = ImageButton(this).apply {
+            setImageResource(android.R.drawable.ic_menu_view)
+            setOnClickListener {
+                if (apiKey.transformationMethod == null) {
+                    apiKey.transformationMethod = PasswordTransformationMethod.getInstance()
+                    setImageResource(android.R.drawable.ic_menu_view)
+                } else {
+                    apiKey.transformationMethod = null
+                    setImageResource(android.R.drawable.ic_delete) // Using standard icons for simple UI
+                }
+                apiKey.setSelection(apiKey.text.length)
+            }
+        }
+        apiKeyLayout.addView(apiKey); apiKeyLayout.addView(showKeyBtn)
+        container.addView(apiKeyLayout)
+
+        removeApiKeyBtn = Button(this).apply {
+            text = "Remove API Key"; visibility = if (p.apiKey.isNotEmpty()) View.VISIBLE else View.GONE
+            setOnClickListener { auth { p.apiKey = ""; apiKey.setText(""); updateUi(); toast("API Key removed") } }
+        }
+        container.addView(removeApiKeyBtn)
+
+        container.addView(Button(this).apply { 
+            text = "Save Configuration 🔒"; setOnClickListener { 
+                auth { 
+                    p.profile = profile.text.toString().trim()
+                    p.manualDeviceName = device.text.toString().trim()
+                    p.useDeviceName = useDeviceNameCb.isChecked
+                    if (apiKey.isEnabled && apiKey.text.isNotEmpty()) {
+                        p.apiKey = apiKey.text.toString().trim()
+                    }
+                    toast("Configuration saved")
+                    updateUi()
+                } 
+            } 
+        })
+        
+        container.addView(Button(this).apply { text = "Wi-Fi exclusions 🔒"; setOnClickListener { auth { editExclusions() } } })
+        container.addView(Button(this).apply { text = "DNS activity"; setOnClickListener { showStats() } })
+        container.addView(Button(this).apply { text = "Protection setup"; setOnClickListener { showSetup() } })
+        container.addView(Button(this).apply { text = "Change PIN 🔒"; setOnClickListener { auth { setupPin(first = false) } } })
+        container.addView(Button(this).apply { text = "Battery optimization"; setOnClickListener { openBatterySettings() } })
+        
         setContentView(root); updateUi()
     }
 
     private fun updateUi() {
         val ssid = currentSsid()
-        status.text = "Profile: ${p.profile}\nDevice: ${p.deviceName}\nNetwork: ${ssid ?: "Mobile data / unavailable"}\nConfigured: Always-on VPN must be enabled in Android VPN settings"
+        val effectiveName = p.getEffectiveDeviceName()
+        status.text = "Profile: ${p.profile.ifBlank { "(not set)" }}\nDevice: $effectiveName\nNetwork: ${ssid ?: "Mobile data / unavailable"}\nConfigured: Always-on VPN must be enabled in Android VPN settings"
+        
         val pm = getSystemService(POWER_SERVICE) as PowerManager
-        protection.text = "Protection checks\n• App enabled: ${if (p.enabled) "YES" else "NO"}\n• Auto-start: YES\n• Battery optimization: ${if (Build.VERSION.SDK_INT < 23 || pm.isIgnoringBatteryOptimizations(packageName)) "DISABLED" else "ENABLED"}\n• Wi-Fi exclusions: ${p.excluded.size}"
+        val encryptStatus = if (p.encryptionWorks) "" else "\n• CONFIG ERROR: Encryption failed"
+        protection.text = "Protection checks\n• App enabled: ${if (p.enabled) "YES" else "NO"}\n• Battery optimization: ${if (Build.VERSION.SDK_INT < 23 || pm.isIgnoringBatteryOptimizations(packageName)) "DISABLED" else "ENABLED"}\n• Wi-Fi exclusions: ${p.excluded.size}$encryptStatus"
+        
         toggle.isChecked = p.enabled
+        
+        // API Key lifecycle logic
+        val hasKey = p.apiKey.isNotEmpty()
+        apiKey.isEnabled = !hasKey && p.encryptionWorks
+        apiKeyLayout.alpha = if (apiKey.isEnabled) 1.0f else 0.5f
+        removeApiKeyBtn.visibility = if (hasKey && p.encryptionWorks) View.VISIBLE else View.GONE
+        
+        if (!p.encryptionWorks) {
+            apiKey.hint = "Security initialization failed"
+            apiKey.setText("")
+        } else if (hasKey) {
+            apiKey.setText("********") // Mask for security when locked
+            apiKey.transformationMethod = PasswordTransformationMethod.getInstance()
+        }
     }
 
     private fun auth(onSuccess: () -> Unit) {
@@ -99,53 +189,30 @@ class MainActivity : AppCompatActivity() {
         val d = AlertDialog.Builder(this).setTitle("DNS activity").setMessage("$localText\n\nFetching NextDNS cloud analytics...").setPositiveButton("OK", null).setNeutralButton("Clear Local") { _, _ -> s.clear(); toast("Local statistics cleared") }.create()
         d.show()
 
-        val currentKey = apiKey.text.toString().trim().ifBlank { p.apiKey }
-        val currentProfile = profile.text.toString().trim().ifBlank { p.profile }
-        Log.e("DnsVpn", "showStats: profile=$currentProfile keyLen=${currentKey.length}")
-
-        if (currentKey.isNotBlank()) {
-            Log.e("DnsVpn", "Starting cloud stats thread")
+        val currentKey = p.apiKey
+        val currentProfile = p.profile
+        
+        if (currentKey.isNotBlank() && currentProfile.isNotBlank()) {
             kotlin.concurrent.thread {
                 try {
                     val cloudData = fetchNextDnsStats(currentProfile, currentKey)
-                    Log.e("DnsVpn", "Cloud data fetched: ${cloudData.take(20)}...")
-                    runOnUiThread {
-                        if (d.isShowing) {
-                            d.setMessage("$localText\n\nNEXTDNS CLOUD (Profile: $currentProfile):\n$cloudData")
-                        } else {
-                            Log.e("DnsVpn", "Dialog was closed before update")
-                        }
-                    }
-                } catch (e: Exception) {
-                    Log.e("DnsVpn", "Thread crashed", e)
-                }
+                    runOnUiThread { if (d.isShowing) d.setMessage("$localText\n\nNEXTDNS CLOUD (Profile: $currentProfile):\n$cloudData") }
+                } catch (_: Exception) {}
             }
         } else {
-            d.setMessage("$localText\n\n(Enter NextDNS API Key in settings to see cloud analytics)")
+            d.setMessage("$localText\n\n(API Key and Profile ID required for cloud analytics)")
         }
     }
 
     private fun fetchNextDnsStats(profile: String, key: String): String {
         return try {
             val url = URL("https://api.nextdns.io/profiles/$profile/analytics/status")
-            Log.e("DnsVpn", "API CALL: $url")
             val conn = url.openConnection() as HttpURLConnection
             conn.setRequestProperty("X-Api-Key", key)
             conn.connectTimeout = 10000; conn.readTimeout = 10000
-            val responseCode = conn.responseCode
-            if (responseCode == 200) {
-                val json = conn.inputStream.bufferedReader().readText()
-                Log.e("DnsVpn", "API SUCCESS: $json")
-                parseAnalyticsStatus(json)
-            } else {
-                val error = conn.errorStream?.bufferedReader()?.readText() ?: conn.responseMessage
-                Log.e("DnsVpn", "API ERROR $responseCode: $error")
-                "Error $responseCode: $error"
-            }
-        } catch (e: Exception) {
-            Log.e("DnsVpn", "API EXCEPTION", e)
-            "Error: ${e.message}"
-        }
+            if (conn.responseCode == 200) parseAnalyticsStatus(conn.inputStream.bufferedReader().readText())
+            else "Error ${conn.responseCode}: ${conn.responseMessage}"
+        } catch (e: Exception) { "Error: ${e.message}" }
     }
 
     private fun parseAnalyticsStatus(json: String): String {

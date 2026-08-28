@@ -2,38 +2,71 @@ package com.jason.dnsrouter
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.os.Build
+import android.provider.Settings
 import android.util.Base64
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import java.security.MessageDigest
 import java.security.SecureRandom
 
-class Prefs(ctx: Context) {
-    private val p: SharedPreferences = try {
-        val masterKey = MasterKey.Builder(ctx)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .build()
+class Prefs(private val ctx: Context) {
+    val encryptionWorks: Boolean
+    private val p: SharedPreferences
+    private val f: SharedPreferences = ctx.getSharedPreferences("config_fallback", Context.MODE_PRIVATE)
 
-        EncryptedSharedPreferences.create(
-            ctx,
-            "config_encrypted",
-            masterKey,
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-        )
-    } catch (e: Exception) {
-        // Fallback for extreme cases, though EncryptedSharedPreferences is target API 23+
-        ctx.getSharedPreferences("config", Context.MODE_PRIVATE)
+    init {
+        var success = false
+        p = try {
+            val masterKey = MasterKey.Builder(ctx)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .build()
+
+            val encrypted = EncryptedSharedPreferences.create(
+                ctx,
+                "config_encrypted",
+                masterKey,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+            success = true
+            encrypted
+        } catch (e: Exception) {
+            f
+        }
+        encryptionWorks = success
     }
 
-    var profile: String get() = p.getString("profile", "") ?: ""; set(v) = p.edit().putString("profile", v).apply()
-    var apiKey: String get() = p.getString("api_key", "") ?: ""; set(v) = p.edit().putString("api_key", v).apply()
-    var deviceName: String get() = p.getString("device", "") ?: ""; set(v) = p.edit().putString("device", v).apply()
-    var enabled: Boolean get() = p.getBoolean("enabled", false); set(v) = p.edit().putBoolean("enabled", v).apply()
-    var autoStart: Boolean get() = p.getBoolean("autostart", true); set(v) = p.edit().putBoolean("autostart", v).apply()
-    var pinHash: String? get() = p.getString("pin_hash", null); private set(v) = p.edit().putString("pin_hash", v).apply()
-    var pinSalt: String? get() = p.getString("pin_salt", null); private set(v) = p.edit().putString("pin_salt", v).apply()
-    var excluded: Set<String> get() = p.getStringSet("excluded", emptySet()) ?: emptySet(); set(v) = p.edit().putStringSet("excluded", v).apply()
+    var profile: String get() = f.getString("profile", "") ?: ""; set(v) = f.edit().putString("profile", v).apply()
+    
+    var apiKey: String 
+        get() = if (encryptionWorks) p.getString("api_key", "") ?: "" else ""
+        set(v) { if (encryptionWorks) p.edit().putString("api_key", v).apply() }
+
+    var useDeviceName: Boolean get() = f.getBoolean("use_hw_name", false); set(v) = f.edit().putBoolean("use_hw_name", v).apply()
+    var manualDeviceName: String get() = f.getString("device", "") ?: ""; set(v) = f.edit().putString("device", v).apply()
+
+    /** Returns the device name to be used for DNS logs. */
+    fun getEffectiveDeviceName(): String {
+        if (useDeviceName) {
+            val name = if (Build.VERSION.SDK_INT >= 25) {
+                Settings.Global.getString(ctx.contentResolver, Settings.Global.DEVICE_NAME)
+                    ?: Settings.Secure.getString(ctx.contentResolver, "bluetooth_name")
+            } else {
+                Settings.Secure.getString(ctx.contentResolver, "bluetooth_name")
+            }
+            return name?.takeUnless { it.isBlank() } ?: Build.MODEL
+        }
+        return manualDeviceName.ifBlank { "Mobile Device" }
+    }
+
+    var enabled: Boolean get() = f.getBoolean("enabled", false); set(v) = f.edit().putBoolean("enabled", v).apply()
+    var autoStart: Boolean get() = f.getBoolean("autostart", true); set(v) = f.edit().putBoolean("autostart", v).apply()
+    
+    var pinHash: String? get() = f.getString("pin_hash", null); private set(v) = f.edit().putString("pin_hash", v).apply()
+    var pinSalt: String? get() = f.getString("pin_salt", null); private set(v) = f.edit().putString("pin_salt", v).apply()
+    
+    var excluded: Set<String> get() = f.getStringSet("excluded", emptySet()) ?: emptySet(); set(v) = f.edit().putStringSet("excluded", v).apply()
 
     fun checkPin(pin: String): Boolean {
         val salt = pinSalt ?: return false
