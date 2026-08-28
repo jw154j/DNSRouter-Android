@@ -12,6 +12,8 @@ import android.net.VpnService
 import android.os.*
 import android.provider.Settings
 import android.net.Uri
+import androidx.core.net.toUri
+import androidx.core.graphics.toColorInt
 import android.text.InputType
 import android.text.method.PasswordTransformationMethod
 import android.view.Gravity
@@ -27,6 +29,7 @@ import java.util.Date
 import java.util.Locale
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.ContextCompat
 
 class MainActivity : AppCompatActivity() {
@@ -77,6 +80,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(b: Bundle?) {
         super.onCreate(b); p = Prefs(this)
+        applyTheme(p.themeMode)
         isAdminMode = isAppManaged()
         
         // Validation: If Admin mode was chosen but setup was never finished (no PIN or contact info), reset to 0.
@@ -95,37 +99,49 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun applyTheme(mode: Int) {
+        val nightMode = when (mode) {
+            1 -> AppCompatDelegate.MODE_NIGHT_NO
+            2 -> AppCompatDelegate.MODE_NIGHT_YES
+            else -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
+        }
+        AppCompatDelegate.setDefaultNightMode(nightMode)
+    }
+
     private fun startMainApp() {
         buildUi(); checkVersionAndReport(); requestWifiPermission()
     }
 
     private fun showControlModeSelection() {
-        val dialog = Dialog(this, android.R.style.Theme_Material_Light_NoActionBar_Fullscreen)
+        val isDark = (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
+        val dialog = Dialog(this, if (isDark) android.R.style.Theme_Material_NoActionBar_Fullscreen else android.R.style.Theme_Material_Light_NoActionBar_Fullscreen)
         setupDialog = dialog
         
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             setPadding(80, 40, 80, 40)
-            setBackgroundColor(Color.WHITE)
+            setBackgroundColor(if (isDark) "#121212".toColorInt() else Color.WHITE)
         }
 
         root.addView(TextView(this).apply {
             text = "Welcome to DNS Router"; textSize = 28f
             typeface = Typeface.DEFAULT_BOLD; gravity = Gravity.CENTER
-            setPadding(0, 0, 0, 20); setTextColor(Color.BLACK)
+            setPadding(0, 0, 0, 20); setTextColor(if (isDark) Color.WHITE else Color.BLACK)
         })
 
         root.addView(TextView(this).apply {
             text = "Select your setup type to continue."; textSize = 16f
-            gravity = Gravity.CENTER; setPadding(0, 0, 0, 100)
+            gravity = Gravity.CENTER; setPadding(0, 0, 0, 100); setTextColor(if (isDark) Color.LTGRAY else Color.GRAY)
         })
 
         // User Setup Option
         val userBtn = Button(this).apply {
             text = "USER SETUP\n(I control this device)"; textSize = 18f
-            setPadding(40, 60, 40, 60); setAllCaps(true)
-            setBackgroundColor(Color.parseColor("#E0E0E0"))
+            setPadding(40, 60, 40, 60); isAllCaps = true
+            val btnColor = if (isDark) "#2C2C2C" else "#E0E0E0"
+            setBackgroundColor(btnColor.toColorInt())
+            setTextColor(if (isDark) Color.WHITE else Color.BLACK)
             setOnClickListener {
                 p.controlMode = 1
                 dialog.dismiss()
@@ -135,14 +151,16 @@ class MainActivity : AppCompatActivity() {
         root.addView(userBtn)
         root.addView(TextView(this).apply {
             text = "You control DNS Router settings on this device."; textSize = 13f
-            gravity = Gravity.CENTER; setPadding(0, 10, 0, 80)
+            gravity = Gravity.CENTER; setPadding(0, 10, 0, 80); setTextColor(if (isDark) Color.GRAY else Color.DKGRAY)
         })
 
         // Admin Setup Option
         val adminBtn = Button(this).apply {
             text = "ADMIN SETUP\n(Managed Device)"; textSize = 18f
-            setPadding(40, 60, 40, 60); setAllCaps(true)
-            setBackgroundColor(Color.parseColor("#BBDEFB"))
+            setPadding(40, 60, 40, 60); isAllCaps = true
+            val btnColor = if (isDark) "#1976D2" else "#BBDEFB"
+            setBackgroundColor(btnColor.toColorInt())
+            setTextColor(if (isDark) Color.WHITE else Color.BLACK)
             setOnClickListener {
                 startAdminSetupFlow(dialog)
             }
@@ -150,7 +168,7 @@ class MainActivity : AppCompatActivity() {
         root.addView(adminBtn)
         root.addView(TextView(this).apply {
             text = "A network administrator controls settings. PIN and contact info required."; textSize = 13f
-            gravity = Gravity.CENTER; setPadding(0, 10, 0, 0)
+            gravity = Gravity.CENTER; setPadding(0, 10, 0, 0); setTextColor(if (isDark) Color.GRAY else Color.DKGRAY)
         })
 
         dialog.setContentView(root)
@@ -211,11 +229,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun checkVersionAndReport() {
-        val currentVersion = try { packageManager.getPackageInfo(packageName, 0).versionCode } catch (_: Exception) { 0 }
-        if (p.lastVersionCode != currentVersion) { p.lastVersionCode = currentVersion; showCompatibilityReport(isAuto = true) }
+        val currentVersion = try { packageManager.getPackageInfo(packageName, 0).longVersionCode } catch (_: Exception) { 0L }
+        if (p.lastVersionCode != currentVersion.toInt()) { p.lastVersionCode = currentVersion.toInt(); showCompatibilityReport(isAuto = true) }
     }
 
     private fun buildUi() {
+        val isDark = (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
+        val cardBg = if (isDark) Color.parseColor("#1FFFFFFF") else Color.parseColor("#08000000")
+        val statusBg = if (isDark) Color.parseColor("#2FFFFFFF") else Color.parseColor("#10000000")
+        
         val root = ScrollView(this).apply { isFillViewport = true }
         val container = LinearLayout(this).apply { 
             orientation = LinearLayout.VERTICAL
@@ -230,7 +252,7 @@ class MainActivity : AppCompatActivity() {
         if (isAdminMode || p.controlMode == 2) container.addView(TextView(this).apply { text = "NETWORK ADMIN MODE ACTIVE"; setTextColor(Color.RED); textSize = 12f; gravity = Gravity.CENTER; setPadding(0, 0, 0, 8) })
         status = TextView(this).apply { textSize = 16f; setPadding(0, 12, 0, 12) }; container.addView(status)
         container.addView(TextView(this).apply { text = "Reliability Status"; textSize = 18f; setPadding(0, 16, 0, 8) })
-        val relCard = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 16, 24, 16); setBackgroundColor(Color.parseColor("#08000000")) }
+        val relCard = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 16, 24, 16); setBackgroundColor(cardBg) }
         alwaysOnCircle = View(this); relCard.addView(createReliabilityRow("Always-on VPN", alwaysOnCircle))
         batteryCircle = View(this); relCard.addView(createReliabilityRow("Battery Optimization", batteryCircle))
         autoStartCircle = View(this); relCard.addView(createReliabilityRow("Boot Auto-Start", autoStartCircle))
@@ -240,14 +262,14 @@ class MainActivity : AppCompatActivity() {
         wifiExclusionCircle = View(this).apply { layoutParams = LinearLayout.LayoutParams(24, 24) }
         wifiExRow.addView(wifiExclusionTv); wifiExRow.addView(wifiExclusionCircle); relCard.addView(wifiExRow); container.addView(relCard)
         container.addView(TextView(this).apply { text = "Security Diagnostics"; textSize = 18f; setPadding(0, 24, 0, 8) })
-        val secCard = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 16, 24, 16); setBackgroundColor(Color.parseColor("#08000000")) }
+        val secCard = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 16, 24, 16); setBackgroundColor(cardBg) }
         dnsCheckCircle = View(this); secCard.addView(createReliabilityRow("DNS Protection Check", dnsCheckCircle))
         browserWarningCircle = View(this); secCard.addView(createReliabilityRow("Browser DNS Status", browserWarningCircle))
         connectivityCircle = View(this); secCard.addView(createReliabilityRow("NextDNS Connectivity", connectivityCircle))
         cloudCircle = View(this); secCard.addView(createReliabilityRow("Cloud Log Verification", cloudCircle))
         lastTestTv = TextView(this).apply { textSize = 12f; setPadding(0, 8, 0, 8); alpha = 0.7f }; secCard.addView(lastTestTv)
         secCard.addView(Button(this).apply { text = "Run Security Tests"; textSize = 12f; setOnClickListener { runSecurityTests() } }); container.addView(secCard)
-        systemStatus = TextView(this).apply { textSize = 14f; setPadding(24, 16, 24, 16); setBackgroundColor(Color.parseColor("#10000000")) }; container.addView(systemStatus)
+        systemStatus = TextView(this).apply { textSize = 14f; setPadding(24, 16, 24, 16); setBackgroundColor(statusBg) }; container.addView(systemStatus)
         container.addView(TextView(this).apply { text = "Setup & Protection"; textSize = 18f; setPadding(0, 24, 0, 8) })
         val grid = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val row1 = createRow()
@@ -273,7 +295,7 @@ class MainActivity : AppCompatActivity() {
         container.addView(CheckBox(this).apply { text = "Protect Mobile/Cellular Data"; isChecked = p.protectMobile; setOnCheckedChangeListener { _, isChecked -> p.protectMobile = isChecked; updateUi() } })
         container.addView(CheckBox(this).apply { text = "Protect Other Networks (Ethernet, USB, etc.)"; isChecked = p.protectOther; isEnabled = !(isAdminMode || p.controlMode == 2); setOnCheckedChangeListener { _, isChecked -> p.protectOther = isChecked; updateUi() } })
         container.addView(TextView(this).apply { text = "Profile ID"; setPadding(0, 8, 0, 4) })
-        profile = EditText(this).apply { hint = "Profile ID"; setText(p.profile); isSingleLine = true; isEnabled = !(isAdminMode || p.controlMode == 2); if (Build.VERSION.SDK_INT >= 26) { importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO } }
+        profile = EditText(this).apply { hint = "Profile ID"; setText(p.profile); isSingleLine = true; isEnabled = !(isAdminMode || p.controlMode == 2); importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO }
         container.addView(profile)
         container.addView(TextView(this).apply { text = "Device Identifier"; setPadding(0, 16, 0, 4) })
         device = EditText(this).apply { hint = "Mobile Device (if blank)"; setText(p.manualDeviceName); isSingleLine = true; visibility = if (p.useDeviceName) View.GONE else View.VISIBLE; isEnabled = !(isAdminMode || p.controlMode == 2) }
@@ -295,12 +317,12 @@ class MainActivity : AppCompatActivity() {
         container.addView(adminSectionLabel)
         adminEmailLabel = TextView(this).apply { text = "Administrator Email (Required for support)"; setPadding(0, 8, 0, 4) }
         container.addView(adminEmailLabel)
-        adminEmailEt = EditText(this).apply { hint = "admin@example.com"; setText(p.adminEmail); isSingleLine = true; isEnabled = false; if (Build.VERSION.SDK_INT >= 26) setAutofillHints(View.AUTOFILL_HINT_EMAIL_ADDRESS)
+        adminEmailEt = EditText(this).apply { hint = "admin@example.com"; setText(p.adminEmail); isSingleLine = true; isEnabled = false; setAutofillHints(View.AUTOFILL_HINT_EMAIL_ADDRESS)
             setOnClickListener { if (!isEnabled && !isAdminMode && p.controlMode == 2) auth { isEnabled = true; adminPhoneEt.isEnabled = true; requestFocus(); val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager; imm.showSoftInput(this, 0) } } }
         container.addView(adminEmailEt)
         adminPhoneLabel = TextView(this).apply { text = "Administrator Phone (Required for support)"; setPadding(0, 16, 0, 4) }
         container.addView(adminPhoneLabel)
-        adminPhoneEt = EditText(this).apply { hint = "+1234567890"; setText(p.adminPhone); isSingleLine = true; inputType = InputType.TYPE_CLASS_PHONE; isEnabled = false; if (Build.VERSION.SDK_INT >= 26) setAutofillHints(View.AUTOFILL_HINT_PHONE)
+        adminPhoneEt = EditText(this).apply { hint = "+1234567890"; setText(p.adminPhone); isSingleLine = true; inputType = InputType.TYPE_CLASS_PHONE; isEnabled = false; setAutofillHints(View.AUTOFILL_HINT_PHONE)
             setOnClickListener { if (!isEnabled && !isAdminMode && p.controlMode == 2) auth { isEnabled = true; adminEmailEt.isEnabled = true; requestFocus(); val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager; imm.showSoftInput(this, 0) } } }
         container.addView(adminPhoneEt)
         
@@ -342,6 +364,24 @@ class MainActivity : AppCompatActivity() {
         }
         container.addView(adminSwitchBtn)
         container.addView(Button(this).apply { text = "DNS Activity Counters"; setOnClickListener { showStats() } })
+        
+        container.addView(TextView(this).apply { text = "App Theme"; textSize = 18f; setPadding(0, 32, 0, 8) })
+        val themeSpinner = Spinner(this)
+        val themes = arrayOf("System Default", "Light Mode", "Dark Mode")
+        themeSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, themes)
+        themeSpinner.setSelection(p.themeMode)
+        themeSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                if (p.themeMode != position) {
+                    p.themeMode = position
+                    applyTheme(position)
+                    recreate()
+                }
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+        container.addView(themeSpinner)
+
         pinManageBtn = Button(this).apply { isEnabled = !isAdminMode; setOnClickListener { managePin() } }; container.addView(pinManageBtn); setContentView(root); updateUi()
     }
 
@@ -354,7 +394,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateUi() {
         val ssid = currentSsid(); val effectiveName = p.getEffectiveDeviceName(); status.text = "Profile: ${p.profile.ifBlank { "(not set)" }}\nDevice: $effectiveName\nNetwork: ${ssid ?: "Mobile data / Wi-Fi name unavailable"}"
-        val pm = getSystemService(POWER_SERVICE) as PowerManager; val isBatteryExempt = Build.VERSION.SDK_INT < 23 || pm.isIgnoringBatteryOptimizations(packageName)
+        val pm = getSystemService(POWER_SERVICE) as PowerManager; val isBatteryExempt = pm.isIgnoringBatteryOptimizations(packageName)
         val isAlwaysOn = isAlwaysOnVpnEnabled(); val isOptimal = p.enabled && p.autoStart && p.foregroundService && isBatteryExempt && isAlwaysOn
         systemStatus.text = buildString { append("✓ Constant Polling: NO (Efficient)\n✓ Permanent NextDNS: NO (Standard DoH)\n• Optimal Setup: ${if (isOptimal) "YES" else "NO"}\n")
             if (!isOptimal) append("\n(Follow indicators and buttons to optimize performance)") else append("\nYour DNS protection is configured for maximum reliability.") }
@@ -363,7 +403,7 @@ class MainActivity : AppCompatActivity() {
         val isMobile = ssid == null; val globallyBypassed = (isMobile && !p.protectMobile) || (ssid != null && !p.protectWifi)
         val isSsidExcluded = ssid != null && p.excluded.any { it.equals(ssid, ignoreCase = true) }; val isBypassed = globallyBypassed || isSsidExcluded
         wifiExclusionTv.text = "Wi-Fi Exclusion: ${if (isBypassed) "Excluded" else "Not Excluded"}"; updateCircleColor(wifiExclusionCircle, if (isBypassed) "#4CAF50" else "#9E9E9E")
-        setBtnStatus(toggleBtn, p.enabled, true); setBtnStatus(autoStartBtn, p.autoStart, true); setBtnStatus(foregroundBtn, p.foregroundService, true); setBtnStatus(batteryBtn, isBatteryExempt, false); setBtnStatus(alwaysOnBtn, isAlwaysOn, true)
+        setBtnStatus(toggleBtn, p.enabled, critical = true); setBtnStatus(autoStartBtn, p.autoStart, critical = true); setBtnStatus(foregroundBtn, p.foregroundService, critical = true); setBtnStatus(batteryBtn, isBatteryExempt, critical = false); setBtnStatus(alwaysOnBtn, isAlwaysOn, critical = true)
         
         val isAdmin = p.controlMode == 2 || isAdminMode
         val vis = if (isAdmin) View.VISIBLE else View.GONE
@@ -404,17 +444,17 @@ class MainActivity : AppCompatActivity() {
 
     private fun showSupportOptions() { AlertDialog.Builder(this).setTitle("Support Options").setItems(arrayOf("General Support Request", "Request App Exclusion")) { _, which -> if (which == 0) contactAdmin("General Support Request") else requestAppExclusion() }.setNegativeButton("Cancel", null).show() }
     private fun manageAppExclusions() {
-        val items = p.excludedApps.toList().sorted()
+        val items = p.excludedApps.sorted()
         val adapter = object : ArrayAdapter<String>(this, android.R.layout.simple_list_item_1, items) {
             override fun getView(pos: Int, v: View?, parent: ViewGroup): View { val tv = super.getView(pos, v, parent) as TextView; val pkg = getItem(pos)!!; try { val label = packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)); tv.text = "$label ($pkg)" } catch (_: Exception) {}; return tv }
         }
         val list = ListView(this).apply { setAdapter(adapter) }
-        val dialog = AlertDialog.Builder(this).setTitle("Manage App Exclusions").setView(list).setPositiveButton("Add App") { _, _ -> showAppPicker { pkg -> p.excludedApps = p.excludedApps + pkg; updateUi(); manageAppExclusions() } }.setNegativeButton("Close", null).create()
-        list.setOnItemLongClickListener { _, _, pos, _ -> val pkg = items[pos]; AlertDialog.Builder(this).setMessage("Remove $pkg from exclusions?").setPositiveButton("Remove") { _, _ -> p.excludedApps = p.excludedApps - pkg; updateUi(); dialog.dismiss(); manageAppExclusions() }.setNegativeButton("Cancel", null).show(); true }
+        val dialog = AlertDialog.Builder(this).setTitle("Manage App Exclusions").setView(list).setPositiveButton("Add App") { _, _ -> showAppPicker { pkg -> p.excludedApps += pkg; updateUi(); manageAppExclusions() } }.setNegativeButton("Close", null).create()
+        list.setOnItemLongClickListener { _, _, pos, _ -> val pkg = items[pos]; AlertDialog.Builder(this).setMessage("Remove $pkg from exclusions?").setPositiveButton("Remove") { _, _ -> p.excludedApps -= pkg; updateUi(); dialog.dismiss(); manageAppExclusions() }.setNegativeButton("Cancel", null).show(); true }
         dialog.show()
     }
     private fun showAppPicker(onSelected: (String) -> Unit) {
-        val apps = packageManager.getInstalledApplications(0).filter { (it.flags and ApplicationInfo.FLAG_SYSTEM) == 0 }.sortedBy { packageManager.getApplicationLabel(it).toString() }
+        val apps = packageManager.getInstalledApplications(0).asSequence().filter { (it.flags and ApplicationInfo.FLAG_SYSTEM) == 0 }.sortedBy { packageManager.getApplicationLabel(it).toString() }.toList()
         val labels = apps.map { "${packageManager.getApplicationLabel(it)} (${it.packageName})" }.toTypedArray()
         AlertDialog.Builder(this).setTitle("Select App").setItems(labels) { _, which -> onSelected(apps[which].packageName) }.show()
     }
@@ -435,23 +475,23 @@ class MainActivity : AppCompatActivity() {
         if (email.isBlank() && phone.isBlank()) { toast("Admin contact info not set"); return }
         val subject = "DNS Router Support: $context"; val report = customBody ?: buildString { append("Device: ${p.getEffectiveDeviceName()}\nApp Version: ${versionName()}\nAndroid API: ${Build.VERSION.SDK_INT}\nProfile ID: ${p.profile}\nProtection Enabled: ${p.enabled}\n")
             val df = SimpleDateFormat("MMM dd, HH:mm", Locale.getDefault()); append("Last Test: ${if (p.lastSuccessfulTest > 0) df.format(Date(p.lastSuccessfulTest)) else "Never"}\n\nProblem details:\n") }
-        val emailIntent = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:${Uri.encode(email)}?subject=${Uri.encode(subject)}&body=${Uri.encode(report)}"))
-        val smsIntent = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$phone")).apply { putExtra("sms_body", report) }
+        val emailIntent = Intent(Intent.ACTION_SENDTO, "mailto:${Uri.encode(email)}?subject=${Uri.encode(subject)}&body=${Uri.encode(report)}".toUri())
+        val smsIntent = Intent(Intent.ACTION_SENDTO, "smsto:$phone".toUri()).apply { putExtra("sms_body", report) }
         val fallbackIntent = Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_SUBJECT, subject); putExtra(Intent.EXTRA_TEXT, "$subject\n\n$report") }
         val chooser = Intent.createChooser(fallbackIntent, "Request Assistance via:"); val initials = mutableListOf<Intent>(); if (email.isNotBlank()) initials.add(emailIntent); if (phone.isNotBlank()) initials.add(smsIntent)
         if (initials.isNotEmpty()) chooser.putExtra(Intent.EXTRA_INITIAL_INTENTS, initials.toTypedArray())
-        try { startActivity(chooser) } catch (e: Exception) { toast("No contact app found") }
+        try { startActivity(chooser) } catch (_: Exception) { toast("No contact app found") }
     }
 
     private fun versionName() = try { packageManager.getPackageInfo(packageName, 0).versionName } catch (_: Exception) { "unknown" }
     private fun isAlwaysOnVpnEnabled(): Boolean = Settings.Secure.getString(contentResolver, "always_on_vpn_app") == packageName
     private fun showCompatibilityReport(isAuto: Boolean) {
-        val pm = getSystemService(POWER_SERVICE) as PowerManager; val isBatteryExempt = Build.VERSION.SDK_INT < 23 || pm.isIgnoringBatteryOptimizations(packageName)
+        val pm = getSystemService(POWER_SERVICE) as PowerManager; val isBatteryExempt = pm.isIgnoringBatteryOptimizations(packageName)
         val report = buildString { append("CORE SERVICES (Required)\n• DNS-only VPN: Core Support\n• NextDNS DoH: Core Support\n• Encrypted Storage: ${if (p.encryptionWorks) "Required (Active)" else "FAILED"}\n\n")
             append("RECOMMENDED (For Reliability)\n• Always-On VPN: ${if (isAlwaysOnVpnEnabled()) "Active" else "Highly Recommended"}\n• Battery Exemption: ${if (isBatteryExempt) "Active" else "Recommended"}\n• Boot Auto-Start: ${if (p.autoStart) "Active" else "Use"}\n• Foreground Service: ${if (p.foregroundService) "Active" else "Use"}\n\n")
             append("OPTIONAL (Features)\n• NextDNS API: ${if (p.apiKey.isNotEmpty()) "Configured" else "Optional"}\n• Wi-Fi Exclusions: ${if (p.excluded.isNotEmpty()) "In Use (${p.excluded.size})" else "Optional"}\n• PIN Protection: ${if (p.pinHash != null) "Active" else "Optional"}") }
         AlertDialog.Builder(this).setTitle(if (isAuto) "Version Update: Support Report" else "Device Support Report").setMessage(report).setPositiveButton("OK", null).show() }
-    private fun checkBatteryOptimizationOnStartup() { val pm = getSystemService(POWER_SERVICE) as PowerManager; if (Build.VERSION.SDK_INT >= 23 && !pm.isIgnoringBatteryOptimizations(packageName)) { AlertDialog.Builder(this).setTitle("Performance Warning").setMessage("Android may stop DNS Routing in the background if battery optimization is enabled. For reliable automatic DNS Protection, allow DNS Router to run without battery optimization.").setPositiveButton("Disable") { _, _ -> showBatteryDialog() }.setNegativeButton("Later", null).show() } }
+    private fun checkBatteryOptimizationOnStartup() { val pm = getSystemService(POWER_SERVICE) as PowerManager; if (!pm.isIgnoringBatteryOptimizations(packageName)) { AlertDialog.Builder(this).setTitle("Performance Warning").setMessage("Android may stop DNS Routing in the background if battery optimization is enabled. For reliable automatic DNS Protection, allow DNS Router to run without battery optimization.").setPositiveButton("Disable") { _, _ -> showBatteryDialog() }.setNegativeButton("Later", null).show() } }
     private fun showBatteryDialog() { AlertDialog.Builder(this).setTitle("Background Reliability").setMessage("To prevent the system from killing the VPN service, you must disable battery optimization for DNS Router. On the next screen, find this app and select 'Don't optimize' or 'Unrestricted'.").setPositiveButton("Proceed") { _, _ -> openBatterySettings() }.setNegativeButton("Cancel", null).show() }
     private fun managePin() { if (p.pinHash == null) showSetPinDialog() else auth { AlertDialog.Builder(this).setTitle("Manage PIN").setItems(arrayOf("Change PIN", "Remove PIN")) { _, which -> if (which == 0) showSetPinDialog() else { p.clearPin(); updateUi(); toast("PIN removed") } }.setNegativeButton("Cancel", null).show() } }
     private fun showSetPinDialog(onSaved: (() -> Unit)? = null) {
@@ -501,8 +541,8 @@ class MainActivity : AppCompatActivity() {
     private fun fetchNextDnsStats(profile: String, key: String): String { return try { val url = URL("https://api.nextdns.io/profiles/$profile/analytics/status"); val conn = url.openConnection() as HttpURLConnection; conn.setRequestProperty("X-Api-Key", key); conn.connectTimeout = 10000; conn.readTimeout = 10000; if (conn.responseCode == 200) parseAnalyticsStatus(conn.inputStream.bufferedReader().readText()) else "Error ${conn.responseCode}: ${conn.responseMessage}" } catch (e: Exception) { "Error: ${e.message}" } }
     private fun parseAnalyticsStatus(json: String): String { val total = Regex("\"totalQueries\":\\s*(\\d+)").find(json)?.groupValues?.get(1) ?: "0"; val blocked = Regex("\"blockedQueries\":\\s*(\\d+)").find(json)?.groupValues?.get(1) ?: "0"; return "Total Queries: $total\nBlocked: $blocked" }
     private fun showSetup() { AlertDialog.Builder(this).setTitle("Always-On VPN Protection").setMessage("Highly Recommended: Enabling 'Always-on VPN' in Android settings ensures DNS Router is automatically managed by the system.\n\nRisk: If NOT enabled, DNS queries may bypass NextDNS during network transitions or if the app is stopped.\n\nOptional: 'Block connections without VPN' provides strict protection by disabling internet if the VPN is not connected.").setPositiveButton("Open Settings") { _, _ -> try { startActivity(Intent(Settings.ACTION_VPN_SETTINGS)) } catch (_: Exception) {} }.setNegativeButton("Close", null).show() }
-    private fun openBatterySettings() { try { startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).setData(Uri.parse("package:$packageName"))) } catch (_: Exception) { startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) } }
-    private fun requestWifiPermission() { if (Build.VERSION.SDK_INT >= 23 && ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) { locationPermission.launch(Manifest.permission.ACCESS_FINE_LOCATION) } else { checkBatteryOptimizationOnStartup() } }
+    private fun openBatterySettings() { try { startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).setData("package:$packageName".toUri())) } catch (_: Exception) { startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) } }
+    private fun requestWifiPermission() { if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) { locationPermission.launch(Manifest.permission.ACCESS_FINE_LOCATION) } else { checkBatteryOptimizationOnStartup() } }
     @Suppress("DEPRECATION")
     private fun currentSsid(): String? = try { val wm = getSystemService(WIFI_SERVICE) as android.net.wifi.WifiManager; wm.connectionInfo.ssid?.trim('\"')?.takeUnless { it.isBlank() || it == "<unknown ssid>" } } catch (_: Exception) { null }
     private fun toast(s: String) = Toast.makeText(this, s, Toast.LENGTH_SHORT).show()

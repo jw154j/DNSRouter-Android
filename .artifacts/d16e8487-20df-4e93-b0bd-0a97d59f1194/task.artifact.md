@@ -1,0 +1,5 @@
+- [x] Update `Prefs.kt` to add `themeMode`
+- [x] Update `MainActivity.kt` to support theme switching
+- [x] Improve readability of "User" and "Admin" buttons
+- [x] Add theme selection UI in `MainActivity.kt`
+- [x] Verify status button colors are preserved
