@@ -246,8 +246,9 @@ class DnsVpnService : VpnService() {
     private fun dohQuery(dns: ByteArray): ByteArray? {
         val host = "dns.nextdns.io"
         val profile = prefs.profile.trim().trim('/')
+        if (profile.isEmpty()) return null
         val device = prefs.deviceName.replace(Regex("[^a-zA-Z0-9_-]"), "-")
-        val path = "/$profile/$device"
+        val path = if (device.isEmpty()) "/$profile" else "/$profile/$device"
         
         // Use Anycast IPs directly first to avoid resolution loops.
         val ips = listOf("45.90.28.0", "45.90.30.0", "2a07:a8c0::", "2a07:a8c1::")

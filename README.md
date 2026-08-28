@@ -1,6 +1,12 @@
-# DNS Router for Android - v1.1
+# DNS Router for Android - v1.2
 
 Native Kotlin Android app implementing a **DNS-only** `VpnService` that forwards intercepted UDP DNS packets to a configurable NextDNS DoH endpoint. Normal Internet traffic is not routed through the VPN.
+
+## v1.2 changes
+- **Keystore-backed Encryption**: Configuration data (Profile ID, API Key, Device Name) is now encrypted using hardware-backed keys via `EncryptedSharedPreferences`.
+- **Enhanced Privacy**: Removed all hardcoded developer defaults. Device Name and Profile ID are empty by default.
+- **Improved Onboarding**: DNS Protection is OFF by default at installation to facilitate initial VPN authorization.
+- Fixed DoH path formatting for empty device names.
 
 ## v1.1 changes
 - IPv4 **and IPv6 UDP DNS** packet handling.

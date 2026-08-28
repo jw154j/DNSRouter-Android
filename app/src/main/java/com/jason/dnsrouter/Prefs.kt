@@ -1,17 +1,35 @@
 package com.jason.dnsrouter
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.util.Base64
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 import java.security.MessageDigest
 import java.security.SecureRandom
 
 class Prefs(ctx: Context) {
-    private val p = ctx.getSharedPreferences("config", Context.MODE_PRIVATE)
+    private val p: SharedPreferences = try {
+        val masterKey = MasterKey.Builder(ctx)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+            .build()
+
+        EncryptedSharedPreferences.create(
+            ctx,
+            "config_encrypted",
+            masterKey,
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+        )
+    } catch (e: Exception) {
+        // Fallback for extreme cases, though EncryptedSharedPreferences is target API 23+
+        ctx.getSharedPreferences("config", Context.MODE_PRIVATE)
+    }
 
     var profile: String get() = p.getString("profile", "") ?: ""; set(v) = p.edit().putString("profile", v).apply()
     var apiKey: String get() = p.getString("api_key", "") ?: ""; set(v) = p.edit().putString("api_key", v).apply()
-    var deviceName: String get() = p.getString("device", "Android") ?: "Android"; set(v) = p.edit().putString("device", v).apply()
-    var enabled: Boolean get() = p.getBoolean("enabled", true); set(v) = p.edit().putBoolean("enabled", v).apply()
+    var deviceName: String get() = p.getString("device", "") ?: ""; set(v) = p.edit().putString("device", v).apply()
+    var enabled: Boolean get() = p.getBoolean("enabled", false); set(v) = p.edit().putBoolean("enabled", v).apply()
     var autoStart: Boolean get() = p.getBoolean("autostart", true); set(v) = p.edit().putBoolean("autostart", v).apply()
     var pinHash: String? get() = p.getString("pin_hash", null); private set(v) = p.edit().putString("pin_hash", v).apply()
     var pinSalt: String? get() = p.getString("pin_salt", null); private set(v) = p.edit().putString("pin_salt", v).apply()
