@@ -383,7 +383,7 @@ class MainActivity : AppCompatActivity() {
                 isConfigUnlocked = false
                 updateUi()
             }
-        }.apply { setPadding(0, 20, 0, 20) }
+        }.apply { text = "Save Configuration"; setPadding(0, 20, 0, 20) }
         container.addView(saveConfigBtn)
         
         adminSectionLabel = TextView(this).apply { text = "Administrator Settings${if (isAdmin) " 🔒" else ""}"; textSize = 18f; setPadding(0, 24, 0, 8) }
@@ -416,7 +416,7 @@ class MainActivity : AppCompatActivity() {
                 isAdminSettingsUnlocked = false
                 updateUi()
             }
-        }.apply { setPadding(0, 20, 0, 20) }
+        }.apply { text = "Save Admin Settings"; setPadding(0, 20, 0, 20) }
         container.addView(saveAdminBtn)
         
         container.addView(Button(this).apply { text = "DNS Activity"; setOnClickListener { showStats() } })

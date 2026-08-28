@@ -95,6 +95,9 @@ class DnsVpnService : VpnService() {
             .addRoute(DNS_V4, 32)
             .addRoute(DNS_V6, 128)
         
+        // Exclude self to prevent infinite loop for libraries like Cronet
+        try { b.addDisallowedApplication(packageName) } catch (_: Exception) {}
+        
         prefs.excludedApps.forEach { 
             try { b.addDisallowedApplication(it) } catch (_: Exception) {} 
         }
@@ -293,7 +296,9 @@ class DnsVpnService : VpnService() {
     }
 
     private fun dotQuery(dns: ByteArray): ByteArray? {
-        val host = "dns.nextdns.io"
+        val profile = prefs.profile.trim().trim('/')
+        if (profile.isEmpty()) return null
+        val sniHost = "$profile.dns.nextdns.io"
         val ips = getDnsIps()
         for (ip in ips) {
             try {
@@ -301,7 +306,7 @@ class DnsVpnService : VpnService() {
                 protect(raw)
                 raw.connect(InetSocketAddress(ip, 853), 4000)
                 raw.soTimeout = 4000
-                val ssl = SSLContext.getDefault().socketFactory.createSocket(raw, host, 853, true) as SSLSocket
+                val ssl = SSLContext.getDefault().socketFactory.createSocket(raw, sniHost, 853, true) as SSLSocket
                 ssl.startHandshake()
                 val out = DataOutputStream(ssl.outputStream)
                 out.writeShort(dns.size)
@@ -313,7 +318,9 @@ class DnsVpnService : VpnService() {
                 ins.readFully(response)
                 ssl.close()
                 return response
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                Log.w("DnsVpn", "DoT $ip failed: ${e.message}")
+            }
         }
         return null
     }
