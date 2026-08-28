@@ -1,26 +1,43 @@
 package com.jason.dnsrouter
 
-import android.app.*
-import android.content.*
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.content.Intent
 import android.content.pm.ServiceInfo
-import android.net.*
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
+import android.net.VpnService
 import android.net.wifi.WifiInfo
-import android.os.*
+import android.os.Build
+import android.os.ParcelFileDescriptor
 import android.util.Log
-import java.io.*
-import java.net.*
+import java.io.BufferedInputStream
+import java.io.ByteArrayOutputStream
+import java.io.DataInputStream
+import java.io.DataOutputStream
+import java.io.FileInputStream
+import java.io.FileOutputStream
+import java.io.InputStream
+import java.io.OutputStream
+import java.net.InetSocketAddress
+import java.net.Socket
+import java.net.URL
+import java.net.URLEncoder
+import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
-import java.util.concurrent.Executors
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLSocket
 import kotlin.concurrent.thread
 import org.chromium.net.CronetEngine
+import org.chromium.net.CronetException
 import org.chromium.net.UrlRequest
 import org.chromium.net.UrlResponseInfo
-import org.chromium.net.CronetException
-import java.nio.ByteBuffer
-import java.util.concurrent.TimeUnit
 
 /** DNS-only VPN with advanced diagnostics and transport support. */
 class DnsVpnService : VpnService() {
@@ -184,7 +201,14 @@ class DnsVpnService : VpnService() {
         establishTunnel()
     }
 
-    private data class UdpQuery(val packet: ByteArray, val dns: ByteArray, val srcPort: Int, val ipv6: Boolean, val src: ByteArray, val dst: ByteArray)
+    private class UdpQuery(
+        
+        val dns: ByteArray,
+        val srcPort: Int,
+        val ipv6: Boolean,
+        val src: ByteArray,
+        val dst: ByteArray
+    )
 
     private fun packetLoop(localTun: ParcelFileDescriptor) {
         val input = FileInputStream(localTun.fileDescriptor)
@@ -196,7 +220,7 @@ class DnsVpnService : VpnService() {
                 if (n <= 0) break
                 val q = parseUdpDns(buf, n) ?: continue
                 pool.execute { handleDns(q, output) }
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 if (running) try { Thread.sleep(100) } catch (_: Exception) {}
             }
         }
@@ -214,7 +238,7 @@ class DnsVpnService : VpnService() {
             if (dstPort != 53) return null
             val udpLen = u16(p, ihl + 4); val dnsLen = udpLen - 8
             if (dnsLen < 12 || ihl + 8 + dnsLen > n) return null
-            return UdpQuery(p.copyOf(n), p.copyOfRange(ihl + 8, ihl + 8 + dnsLen), srcPort, false, p.copyOfRange(12, 16), p.copyOfRange(16, 20))
+            return UdpQuery(p.copyOfRange(ihl + 8, ihl + 8 + dnsLen), srcPort, ipv6 = false, p.copyOfRange(12, 16), p.copyOfRange(16, 20))
         }
         if (version == 6 && n >= 48) {
             var nextHeader = p[6].toInt() and 0xFF; var offset = 40
@@ -228,7 +252,7 @@ class DnsVpnService : VpnService() {
             if (dstPort != 53) return null
             val dnsLen = u16(p, offset + 4) - 8
             if (dnsLen < 12 || offset + 8 + dnsLen > n) return null
-            return UdpQuery(p.copyOf(n), p.copyOfRange(offset + 8, offset + 8 + dnsLen), srcPort, true, p.copyOfRange(8, 24), p.copyOfRange(24, 40))
+            return UdpQuery(p.copyOfRange(offset + 8, offset + 8 + dnsLen), srcPort, ipv6 = true, p.copyOfRange(8, 24), p.copyOfRange(24, 40))
         }
         return null
     }
@@ -246,7 +270,7 @@ class DnsVpnService : VpnService() {
             if (response == null) {
                 stats.inc("errors")
                 stats.logQuery(domain, "failed")
-                runDiagnostics(domain)
+                runDiagnostics()
                 return
             }
             val rcode = if (response.size >= 4) response[3].toInt() and 0x0F else -1
@@ -273,8 +297,7 @@ class DnsVpnService : VpnService() {
     }
 
     private fun resolveDns(dns: ByteArray): ByteArray? {
-        val transport = prefs.dnsTransport
-        return when (transport) {
+        return when (prefs.dnsTransport) {
             0 -> dohQuery(dns)       // DoH
             1 -> doh3Query(dns)      // DoH3
             2 -> dotQuery(dns)       // DoT
@@ -284,12 +307,11 @@ class DnsVpnService : VpnService() {
     }
 
     private fun dohQuery(dns: ByteArray): ByteArray? {
-        val host = "dns.nextdns.io"
         val path = getDnsPath()
         val ips = getDnsIps()
         
         for (ip in ips) {
-            val response = dohQuerySingle(ip, host, path, dns)
+            val response = dohQuerySingle(ip, "dns.nextdns.io", path, dns)
             if (response != null) return response
         }
         return null
@@ -403,15 +425,15 @@ class DnsVpnService : VpnService() {
             val status = Regex("^HTTP/\\d\\.\\d\\s+(\\d+)", RegexOption.MULTILINE).find(header)?.groupValues?.get(1)?.toIntOrNull() ?: 0
             if (status !in 200..299) { ssl.close(); return null }
             val length = Regex("(?im)^Content-Length:\\s*(\\d+)\\s*$").find(header)?.groupValues?.get(1)?.toIntOrNull()
-            val response = if (length != null) readExactly(input, length) else input.readBytes()
+            val response = length?.let { readExactly(input, it) } ?: input.readBytes()
             ssl.close(); return response
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             try { raw.close() } catch (_: Exception) {}
             return null
         }
     }
 
-    private fun runDiagnostics(domain: String) {
+    private fun runDiagnostics() {
         thread {
             val internetUp = try { URL("https://www.google.com/generate_204").openConnection().apply { connectTimeout = 3000 }.getInputStream(); true } catch (_: Exception) { false }
             if (internetUp) {
@@ -441,7 +463,7 @@ class DnsVpnService : VpnService() {
             .setContentTitle("DNS Router").setContentText(text)
             .setSmallIcon(android.R.drawable.stat_sys_warning)
             .setOngoing(true).build()
-        if (Build.VERSION.SDK_INT >= 29) startForeground(NOTIF_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE) else startForeground(NOTIF_ID, n)
+        @Suppress("NewApi") if (Build.VERSION.SDK_INT >= 34) startForeground(NOTIF_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE) else startForeground(NOTIF_ID, n)
     }
 
     private fun createNotificationChannels() {
@@ -478,7 +500,9 @@ class DnsVpnService : VpnService() {
                 state == 3 && c == '\n'.code -> 4
                 else -> 0
             }
-            if (state == 4) return bytes.toString(StandardCharsets.US_ASCII.name())
+            if (state == 4) {
+                return bytes.toString(StandardCharsets.US_ASCII.name())
+            }
         }
         return null
     }
@@ -489,7 +513,7 @@ class DnsVpnService : VpnService() {
         return if (off == length) out else out.copyOf(off)
     }
 
-    private fun urlPathSegment(s: String): String = java.net.URLEncoder.encode(s, "UTF-8").replace("+", "%20")
+    private fun urlPathSegment(s: String): String = URLEncoder.encode(s, "UTF-8").replace("+", "%20")
     private fun u16(a: ByteArray, i: Int) = ((a[i].toInt() and 255) shl 8) or (a[i + 1].toInt() and 255)
     private fun buildUdp4Response(q: UdpQuery, dns: ByteArray): ByteArray {
         val total = 28 + dns.size; val o = ByteArray(total)

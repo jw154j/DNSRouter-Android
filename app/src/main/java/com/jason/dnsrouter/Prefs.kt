@@ -5,11 +5,13 @@ import android.content.SharedPreferences
 import android.os.Build
 import android.provider.Settings
 import android.util.Base64
+import androidx.core.content.edit
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import java.security.MessageDigest
 import java.security.SecureRandom
 
+@Suppress("DEPRECATION")
 class Prefs(private val ctx: Context) {
     val encryptionWorks: Boolean
     private val p: SharedPreferences
@@ -27,60 +29,113 @@ class Prefs(private val ctx: Context) {
                 "config_encrypted",
                 masterKey,
                 EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
             )
             success = true
             encrypted
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             f
         }
         encryptionWorks = success
     }
 
-    var profile: String get() = f.getString("profile", "") ?: ""; set(v) = f.edit().putString("profile", v).apply()
+    var profile: String
+        get() = f.getString("profile", "") ?: ""
+        set(v) = f.edit { putString("profile", v) }
     
     var apiKey: String 
         get() = if (encryptionWorks) p.getString("api_key", "") ?: "" else ""
-        set(v) { if (encryptionWorks) p.edit().putString("api_key", v).apply() }
+        set(v) { if (encryptionWorks) p.edit { putString("api_key", v) } }
 
-    var useDeviceName: Boolean get() = f.getBoolean("use_hw_name", false); set(v) = f.edit().putBoolean("use_hw_name", v).apply()
-    var manualDeviceName: String get() = f.getString("device", "") ?: ""; set(v) = f.edit().putString("device", v).apply()
+    var useDeviceName: Boolean
+        get() = f.getBoolean("use_hw_name", false)
+        set(v) = f.edit { putBoolean("use_hw_name", v) }
+
+    var manualDeviceName: String
+        get() = f.getString("device", "") ?: ""
+        set(v) = f.edit { putString("device", v) }
 
     /** Returns the device name to be used for DNS logs. */
     fun getEffectiveDeviceName(): String {
         if (useDeviceName) {
-            val name = if (Build.VERSION.SDK_INT >= 25) {
-                Settings.Global.getString(ctx.contentResolver, Settings.Global.DEVICE_NAME)
-                    ?: Settings.Secure.getString(ctx.contentResolver, "bluetooth_name")
-            } else {
-                Settings.Secure.getString(ctx.contentResolver, "bluetooth_name")
-            }
+            val name = Settings.Global.getString(ctx.contentResolver, Settings.Global.DEVICE_NAME)
+                ?: Settings.Secure.getString(ctx.contentResolver, "bluetooth_name")
             return name?.takeUnless { it.isBlank() } ?: Build.MODEL
         }
         return manualDeviceName.ifBlank { "Mobile Device" }
     }
 
-    var enabled: Boolean get() = f.getBoolean("enabled", false); set(v) = f.edit().putBoolean("enabled", v).apply()
-    var autoStart: Boolean get() = f.getBoolean("autostart", true); set(v) = f.edit().putBoolean("autostart", v).apply()
-    var foregroundService: Boolean get() = f.getBoolean("foreground", true); set(v) = f.edit().putBoolean("foreground", v).apply()
-    var protectWifi: Boolean get() = f.getBoolean("protect_wifi", false); set(v) = f.edit().putBoolean("protect_wifi", v).apply()
-    var protectMobile: Boolean get() = f.getBoolean("protect_mobile", false); set(v) = f.edit().putBoolean("protect_mobile", v).apply()
-    var protectOther: Boolean get() = f.getBoolean("protect_other", false); set(v) = f.edit().putBoolean("protect_other", v).apply()
-    
-    var pinHash: String? get() = f.getString("pin_hash", null); private set(v) = f.edit().putString("pin_hash", v).apply()
-    var pinSalt: String? get() = f.getString("pin_salt", null); private set(v) = f.edit().putString("pin_salt", v).apply()
-    
-    var excluded: Set<String> get() = f.getStringSet("excluded", emptySet()) ?: emptySet(); set(v) = f.edit().putStringSet("excluded", v).apply()
-    var excludedApps: Set<String> get() = f.getStringSet("excluded_apps", emptySet()) ?: emptySet(); set(v) = f.edit().putStringSet("excluded_apps", v).apply()
+    var enabled: Boolean
+        get() = f.getBoolean("enabled", false)
+        set(v) = f.edit { putBoolean("enabled", v) }
 
-    var lastVersionCode: Int get() = f.getInt("last_vc", 0); set(v) = f.edit().putInt("last_vc", v).apply()
-    var lastSuccessfulTest: Long get() = f.getLong("last_test", 0); set(v) = f.edit().putLong("last_test", v).apply()
-    var adminEmail: String get() = f.getString("admin_email", "") ?: ""; set(v) = f.edit().putString("admin_email", v).apply()
-    var adminPhone: String get() = f.getString("admin_phone", "") ?: ""; set(v) = f.edit().putString("admin_phone", v).apply()
-    var controlMode: Int get() = f.getInt("control_mode", 0); set(v) = f.edit().putInt("control_mode", v).apply() // 0=Unset, 1=Personal, 2=Admin
-    var themeMode: Int get() = f.getInt("theme_mode", 0); set(v) = f.edit().putInt("theme_mode", v).apply() // 0=System, 1=Light, 2=Dark
-    var dnsTransport: Int get() = f.getInt("dns_transport", 0); set(v) = f.edit().putInt("dns_transport", v).apply() // 0=DoH, 1=DoH3, 2=DoT, 3=DoQ
-    var ipVersion: Int get() = f.getInt("ip_version", 0); set(v) = f.edit().putInt("ip_version", v).apply() // 0=Auto, 1=Dual, 2=v4, 3=v6
+    var autoStart: Boolean
+        get() = f.getBoolean("autostart", true)
+        set(v) = f.edit { putBoolean("autostart", v) }
+
+    var foregroundService: Boolean
+        get() = f.getBoolean("foreground", true)
+        set(v) = f.edit { putBoolean("foreground", v) }
+
+    var protectWifi: Boolean
+        get() = f.getBoolean("protect_wifi", false)
+        set(v) = f.edit { putBoolean("protect_wifi", v) }
+
+    var protectMobile: Boolean
+        get() = f.getBoolean("protect_mobile", false)
+        set(v) = f.edit { putBoolean("protect_mobile", v) }
+
+    var protectOther: Boolean
+        get() = f.getBoolean("protect_other", false)
+        set(v) = f.edit { putBoolean("protect_other", v) }
+    
+    var pinHash: String?
+        get() = f.getString("pin_hash", null)
+        private set(v) = f.edit { putString("pin_hash", v) }
+
+    var pinSalt: String?
+        get() = f.getString("pin_salt", null)
+        private set(v) = f.edit { putString("pin_salt", v) }
+    
+    var excluded: Set<String>
+        get() = f.getStringSet("excluded", emptySet()) ?: emptySet()
+        set(v) = f.edit { putStringSet("excluded", v) }
+
+    var excludedApps: Set<String>
+        get() = f.getStringSet("excluded_apps", emptySet()) ?: emptySet()
+        set(v) = f.edit { putStringSet("excluded_apps", v) }
+
+    var lastVersionCode: Int
+        get() = f.getInt("last_vc", 0)
+        set(v) = f.edit { putInt("last_vc", v) }
+
+    var lastSuccessfulTest: Long
+        get() = f.getLong("last_test", 0)
+        set(v) = f.edit { putLong("last_test", v) }
+
+    var adminEmail: String
+        get() = f.getString("admin_email", "") ?: ""
+        set(v) = f.edit { putString("admin_email", v) }
+
+    var adminPhone: String
+        get() = f.getString("admin_phone", "") ?: ""
+        set(v) = f.edit { putString("admin_phone", v) }
+
+    var controlMode: Int
+        get() = f.getInt("control_mode", 0)
+        set(v) = f.edit { putInt("control_mode", v) } // 0=Unset, 1=Personal, 2=Admin
+
+    var themeMode: Int
+        get() = f.getInt("theme_mode", 0)
+        set(v) = f.edit { putInt("theme_mode", v) } // 0=System, 1=Light, 2=Dark
+
+    var dnsTransport: Int
+        get() = f.getInt("dns_transport", 0)
+        set(v) = f.edit { putInt("dns_transport", v) } // 0=DoH, 1=DoH3, 2=DoT, 3=DoQ
+
+    var ipVersion: Int
+        get() = f.getInt("ip_version", 0)
+        set(v) = f.edit { putInt("ip_version", v) } // 0=Auto, 1=Dual, 2=v4, 3=v6
 
     fun checkPin(pin: String): Boolean {
         val salt = pinSalt ?: return false
@@ -99,8 +154,8 @@ class Prefs(private val ctx: Context) {
     }
 
     fun resetAll() {
-        f.edit().clear().apply()
-        if (encryptionWorks) p.edit().clear().apply()
+        f.edit { clear() }
+        if (encryptionWorks) p.edit { clear() }
     }
 
     private fun hash(s: String, salt: ByteArray): String {
