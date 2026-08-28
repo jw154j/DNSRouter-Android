@@ -1,5 +1,9 @@
-- [x] Update `Prefs.kt` to add `themeMode`
-- [x] Update `MainActivity.kt` to support theme switching
-- [x] Improve readability of "User" and "Admin" buttons
-- [x] Add theme selection UI in `MainActivity.kt`
-- [x] Verify status button colors are preserved
+- [x] Update `build.gradle.kts` with Cronet dependency
+- [x] Add `dnsTransport` to `Prefs.kt`
+- [x] Fix button size consistency in `MainActivity.kt`
+- [x] Implement notification permission in onboarding flow
+- [x] Add DNS Transport selection UI to `MainActivity.kt`
+- [x] Implement DoT, DoH3, and DoQ in `DnsVpnService.kt`
+- [x] Implement diagnostic sequence and status notifications in `DnsVpnService.kt`
+- [x] Verify button sizes, onboarding, and DNS transports
+- [x] Implement IP Version selection with IPv6 caution warning

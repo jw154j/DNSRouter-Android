@@ -79,6 +79,8 @@ class Prefs(private val ctx: Context) {
     var adminPhone: String get() = f.getString("admin_phone", "") ?: ""; set(v) = f.edit().putString("admin_phone", v).apply()
     var controlMode: Int get() = f.getInt("control_mode", 0); set(v) = f.edit().putInt("control_mode", v).apply() // 0=Unset, 1=Personal, 2=Admin
     var themeMode: Int get() = f.getInt("theme_mode", 0); set(v) = f.edit().putInt("theme_mode", v).apply() // 0=System, 1=Light, 2=Dark
+    var dnsTransport: Int get() = f.getInt("dns_transport", 0); set(v) = f.edit().putInt("dns_transport", v).apply() // 0=DoH, 1=DoH3, 2=DoT, 3=DoQ
+    var ipVersion: Int get() = f.getInt("ip_version", 0); set(v) = f.edit().putInt("ip_version", v).apply() // 0=Auto, 1=Dual, 2=v4, 3=v6
 
     fun checkPin(pin: String): Boolean {
         val salt = pinSalt ?: return false
