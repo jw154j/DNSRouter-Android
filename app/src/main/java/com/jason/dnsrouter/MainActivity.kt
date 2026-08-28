@@ -138,7 +138,7 @@ class MainActivity : AppCompatActivity() {
         // User Setup Option
         val userBtn = Button(this).apply {
             text = "USER SETUP\n(I control this device)"; textSize = 18f
-            setPadding(40, 60, 40, 60); isAllCaps = true
+            setPadding(40, 60, 40, 60); setAllCaps(true)
             val btnColor = if (isDark) "#2C2C2C" else "#E0E0E0"
             setBackgroundColor(btnColor.toColorInt())
             setTextColor(if (isDark) Color.WHITE else Color.BLACK)
@@ -157,7 +157,7 @@ class MainActivity : AppCompatActivity() {
         // Admin Setup Option
         val adminBtn = Button(this).apply {
             text = "ADMIN SETUP\n(Managed Device)"; textSize = 18f
-            setPadding(40, 60, 40, 60); isAllCaps = true
+            setPadding(40, 60, 40, 60); setAllCaps(true)
             val btnColor = if (isDark) "#1976D2" else "#BBDEFB"
             setBackgroundColor(btnColor.toColorInt())
             setTextColor(if (isDark) Color.WHITE else Color.BLACK)
@@ -235,8 +235,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun buildUi() {
         val isDark = (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
-        val cardBg = if (isDark) Color.parseColor("#1FFFFFFF") else Color.parseColor("#08000000")
-        val statusBg = if (isDark) Color.parseColor("#2FFFFFFF") else Color.parseColor("#10000000")
+        val cardBg = if (isDark) "#1FFFFFFF".toColorInt() else Color.parseColor("#08000000")
+        val statusBg = if (isDark) "#2FFFFFFF".toColorInt() else Color.parseColor("#10000000")
         
         val root = ScrollView(this).apply { isFillViewport = true }
         val container = LinearLayout(this).apply { 
@@ -393,6 +393,7 @@ class MainActivity : AppCompatActivity() {
     private fun createGridButton(label: String, onClick: () -> Unit) = Button(this).apply { text = label; layoutParams = LinearLayout.LayoutParams(0, -2, 1f).apply { setMargins(4, 4, 4, 4) }; setOnClickListener { onClick() } }
 
     private fun updateUi() {
+        if (!::status.isInitialized) return
         val ssid = currentSsid(); val effectiveName = p.getEffectiveDeviceName(); status.text = "Profile: ${p.profile.ifBlank { "(not set)" }}\nDevice: $effectiveName\nNetwork: ${ssid ?: "Mobile data / Wi-Fi name unavailable"}"
         val pm = getSystemService(POWER_SERVICE) as PowerManager; val isBatteryExempt = pm.isIgnoringBatteryOptimizations(packageName)
         val isAlwaysOn = isAlwaysOnVpnEnabled(); val isOptimal = p.enabled && p.autoStart && p.foregroundService && isBatteryExempt && isAlwaysOn
