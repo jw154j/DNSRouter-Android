@@ -56,12 +56,18 @@ class MainActivity : AppCompatActivity() {
     private lateinit var saveConfigBtn: Button
     private lateinit var wifiExclusionBtn: Button
     
+    private lateinit var protectWifiCb: CheckBox
+    private lateinit var protectMobileCb: CheckBox
+    private lateinit var protectOtherCb: CheckBox
+    
     private lateinit var adminSectionLabel: TextView
     private lateinit var adminEmailLabel: TextView
     private lateinit var adminPhoneLabel: TextView
 
     private var isAdminMode = false
+    private var isSettingsUnlocked = false
     private var setupDialog: Dialog? = null
+    private var isUiBuilt = false
 
     private lateinit var alwaysOnCircle: View
     private lateinit var batteryCircle: View
@@ -291,26 +297,29 @@ class MainActivity : AppCompatActivity() {
 
         container.addView(TextView(this).apply { text = "NextDNS Configuration"; textSize = 18f; setPadding(0, 32, 0, 8) })
         container.addView(TextView(this).apply { text = "Select networks to protect with NextDNS. Unselected networks will bypass the VPN tunnel."; textSize = 12f; alpha = 0.7f; setPadding(0, 0, 0, 8) })
-        container.addView(CheckBox(this).apply { text = "Protect Wi-Fi Networks"; isChecked = p.protectWifi; isEnabled = !(isAdminMode || p.controlMode == 2); setOnCheckedChangeListener { _, isChecked -> p.protectWifi = isChecked; updateUi() } })
-        container.addView(CheckBox(this).apply { text = "Protect Mobile/Cellular Data"; isChecked = p.protectMobile; setOnCheckedChangeListener { _, isChecked -> p.protectMobile = isChecked; updateUi() } })
-        container.addView(CheckBox(this).apply { text = "Protect Other Networks (Ethernet, USB, etc.)"; isChecked = p.protectOther; isEnabled = !(isAdminMode || p.controlMode == 2); setOnCheckedChangeListener { _, isChecked -> p.protectOther = isChecked; updateUi() } })
+        protectWifiCb = CheckBox(this).apply { text = "Protect Wi-Fi Networks"; isChecked = p.protectWifi; setOnCheckedChangeListener { _, isChecked -> p.protectWifi = isChecked; updateUi() } }
+        container.addView(protectWifiCb)
+        protectMobileCb = CheckBox(this).apply { text = "Protect Mobile/Cellular Data"; isChecked = p.protectMobile; setOnCheckedChangeListener { _, isChecked -> p.protectMobile = isChecked; updateUi() } }
+        container.addView(protectMobileCb)
+        protectOtherCb = CheckBox(this).apply { text = "Protect Other Networks (Ethernet, USB, etc.)"; isChecked = p.protectOther; setOnCheckedChangeListener { _, isChecked -> p.protectOther = isChecked; updateUi() } }
+        container.addView(protectOtherCb)
         container.addView(TextView(this).apply { text = "Profile ID"; setPadding(0, 8, 0, 4) })
-        profile = EditText(this).apply { hint = "Profile ID"; setText(p.profile); isSingleLine = true; isEnabled = !(isAdminMode || p.controlMode == 2); importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO }
+        profile = EditText(this).apply { hint = "Profile ID"; setText(p.profile); isSingleLine = true; importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO }
         container.addView(profile)
         container.addView(TextView(this).apply { text = "Device Identifier"; setPadding(0, 16, 0, 4) })
-        device = EditText(this).apply { hint = "Mobile Device (if blank)"; setText(p.manualDeviceName); isSingleLine = true; visibility = if (p.useDeviceName) View.GONE else View.VISIBLE; isEnabled = !(isAdminMode || p.controlMode == 2) }
+        device = EditText(this).apply { hint = "Mobile Device (if blank)"; setText(p.manualDeviceName); isSingleLine = true; visibility = if (p.useDeviceName) View.GONE else View.VISIBLE }
         container.addView(device)
-        useDeviceNameCb = CheckBox(this).apply { text = "Use this device's name"; isChecked = p.useDeviceName; isEnabled = !(isAdminMode || p.controlMode == 2); setOnCheckedChangeListener { _, isChecked -> device.visibility = if (isChecked) View.GONE else View.VISIBLE } }
+        useDeviceNameCb = CheckBox(this).apply { text = "Use this device's name"; isChecked = p.useDeviceName; setOnCheckedChangeListener { _, isChecked -> device.visibility = if (isChecked) View.GONE else View.VISIBLE } }
         container.addView(useDeviceNameCb)
         container.addView(TextView(this).apply { text = "API Key (optional)"; setPadding(0, 16, 0, 4) })
         container.addView(TextView(this).apply { text = "Enables cloud analytics and logs. If omitted, only local device counters are shown."; textSize = 12f; alpha = 0.7f; setPadding(0, 0, 0, 8) })
         apiKeyLayout = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        apiKey = EditText(this).apply { hint = "NextDNS API Key"; setText(p.apiKey); isSingleLine = true; inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD; layoutParams = LinearLayout.LayoutParams(0, -2, 1f); isEnabled = !(isAdminMode || p.controlMode == 2) }
-        val showKeyBtn = ImageButton(this).apply { setImageResource(android.R.drawable.ic_menu_view); isEnabled = !(isAdminMode || p.controlMode == 2)
+        apiKey = EditText(this).apply { hint = "NextDNS API Key"; setText(p.apiKey); isSingleLine = true; inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD; layoutParams = LinearLayout.LayoutParams(0, -2, 1f) }
+        val showKeyBtn = ImageButton(this).apply { setImageResource(android.R.drawable.ic_menu_view)
             setOnClickListener { if (apiKey.transformationMethod == null) { apiKey.transformationMethod = PasswordTransformationMethod.getInstance(); setImageResource(android.R.drawable.ic_menu_view) } else { apiKey.transformationMethod = null; setImageResource(android.R.drawable.ic_delete) }; apiKey.setSelection(apiKey.text.length) }
         }
         apiKeyLayout.addView(apiKey); apiKeyLayout.addView(showKeyBtn); container.addView(apiKeyLayout)
-        removeApiKeyBtn = Button(this).apply { text = "Remove API Key"; visibility = if (p.apiKey.isNotEmpty() && !(isAdminMode || p.controlMode == 2)) View.VISIBLE else View.GONE; setOnClickListener { auth { p.apiKey = ""; apiKey.setText(""); updateUi(); toast("API Key removed") } } }
+        removeApiKeyBtn = Button(this).apply { text = "Remove API Key"; setOnClickListener { auth { p.apiKey = ""; apiKey.setText(""); updateUi(); toast("API Key removed") } } }
         container.addView(removeApiKeyBtn)
         
         adminSectionLabel = TextView(this).apply { text = "Administrator Settings"; textSize = 18f; setPadding(0, 24, 0, 8) }
@@ -326,16 +335,29 @@ class MainActivity : AppCompatActivity() {
             setOnClickListener { if (!isEnabled && !isAdminMode && p.controlMode == 2) auth { isEnabled = true; adminEmailEt.isEnabled = true; requestFocus(); val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager; imm.showSoftInput(this, 0) } } }
         container.addView(adminPhoneEt)
         
-        saveConfigBtn = Button(this).apply { text = "Save Configuration 🔒"
-            setOnClickListener { auth { 
-                val email = adminEmailEt.text.toString().trim(); val phone = adminPhoneEt.text.toString().trim()
-                val hasEmail = email.isNotEmpty(); val hasPhone = phone.isNotEmpty()
-                if (p.controlMode == 2 && (hasEmail != hasPhone)) { toast("Email and Phone are both required if one is provided"); return@auth }
-                if (p.controlMode == 2 && (!hasEmail || !hasPhone)) { toast("Email and Phone are both mandatory in Admin mode"); return@auth }
-                p.profile = profile.text.toString().trim(); p.manualDeviceName = device.text.toString().trim(); p.useDeviceName = useDeviceNameCb.isChecked; p.adminEmail = email; p.adminPhone = phone
-                if (apiKey.isEnabled && apiKey.text.isNotEmpty()) p.apiKey = apiKey.text.toString().trim(); toast("Configuration saved"); updateUi(); adminEmailEt.isEnabled = false; adminPhoneEt.isEnabled = false
-            } }
-        }.apply { setPadding(0, 20, 0, 20) }; container.addView(saveConfigBtn)
+        saveConfigBtn = Button(this).apply { 
+            setOnClickListener { 
+                val isAdmin = p.controlMode == 2 || isAdminMode
+                if (isAdmin && !isSettingsUnlocked) {
+                    auth { 
+                        isSettingsUnlocked = true
+                        updateUi()
+                        toast("Settings Unlocked")
+                    }
+                    return@setOnClickListener
+                }
+                
+                auth { 
+                    val email = adminEmailEt.text.toString().trim(); val phone = adminPhoneEt.text.toString().trim()
+                    val hasEmail = email.isNotEmpty(); val hasPhone = phone.isNotEmpty()
+                    if (p.controlMode == 2 && (hasEmail != hasPhone)) { toast("Email and Phone are both required if one is provided"); return@auth }
+                    if (p.controlMode == 2 && (!hasEmail || !hasPhone)) { toast("Email and Phone are both mandatory in Admin mode"); return@auth }
+                    p.profile = profile.text.toString().trim(); p.manualDeviceName = device.text.toString().trim(); p.useDeviceName = useDeviceNameCb.isChecked; p.adminEmail = email; p.adminPhone = phone
+                    if (apiKey.isEnabled && apiKey.text.isNotEmpty() && apiKey.text.toString() != "********") p.apiKey = apiKey.text.toString().trim()
+                    toast("Configuration saved"); isSettingsUnlocked = false; updateUi()
+                } 
+            }
+        }.apply { text = "Save Configuration 🔒"; setPadding(0, 20, 0, 20) }; container.addView(saveConfigBtn)
         
         adminSwitchBtn = Button(this).apply { 
             setOnClickListener { 
@@ -345,9 +367,16 @@ class MainActivity : AppCompatActivity() {
                             .setTitle("Change to User Setup?")
                             .setMessage("WARNING: All settings will become unlocked and the PIN will be invalidated. Email and Phone data will be removed. Proceed?")
                             .setPositiveButton("Proceed") { _, _ ->
-                                p.clearPin(); p.adminEmail = ""; p.adminPhone = ""
-                                p.controlMode = 1; buildUi(); updateUi()
-                                toast("Switched to User Control")
+                                AlertDialog.Builder(this@MainActivity)
+                                    .setTitle("Double Confirmation")
+                                    .setMessage("Confirm switching to User Setup? This action cannot be undone without re-running Admin Setup.")
+                                    .setPositiveButton("Confirm Switch") { _, _ ->
+                                        p.clearPin(); p.adminEmail = ""; p.adminPhone = ""
+                                        p.controlMode = 1; buildUi(); updateUi()
+                                        toast("Switched to User Control")
+                                    }
+                                    .setNegativeButton("Cancel", null)
+                                    .show()
                             }
                             .setNegativeButton("Cancel", null)
                             .show()
@@ -382,7 +411,8 @@ class MainActivity : AppCompatActivity() {
         }
         container.addView(themeSpinner)
 
-        pinManageBtn = Button(this).apply { isEnabled = !isAdminMode; setOnClickListener { managePin() } }; container.addView(pinManageBtn); setContentView(root); updateUi()
+        pinManageBtn = Button(this).apply { isEnabled = !isAdminMode; setOnClickListener { managePin() } }; container.addView(pinManageBtn); setContentView(root)
+        isUiBuilt = true; updateUi()
     }
 
     private fun createReliabilityRow(label: String, circle: View): View { val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(0, 4, 0, 4) }
@@ -393,7 +423,7 @@ class MainActivity : AppCompatActivity() {
     private fun createGridButton(label: String, onClick: () -> Unit) = Button(this).apply { text = label; layoutParams = LinearLayout.LayoutParams(0, -2, 1f).apply { setMargins(4, 4, 4, 4) }; setOnClickListener { onClick() } }
 
     private fun updateUi() {
-        if (!::status.isInitialized) return
+        if (!isUiBuilt) return
         val ssid = currentSsid(); val effectiveName = p.getEffectiveDeviceName(); status.text = "Profile: ${p.profile.ifBlank { "(not set)" }}\nDevice: $effectiveName\nNetwork: ${ssid ?: "Mobile data / Wi-Fi name unavailable"}"
         val pm = getSystemService(POWER_SERVICE) as PowerManager; val isBatteryExempt = pm.isIgnoringBatteryOptimizations(packageName)
         val isAlwaysOn = isAlwaysOnVpnEnabled(); val isOptimal = p.enabled && p.autoStart && p.foregroundService && isBatteryExempt && isAlwaysOn
@@ -407,19 +437,31 @@ class MainActivity : AppCompatActivity() {
         setBtnStatus(toggleBtn, p.enabled, critical = true); setBtnStatus(autoStartBtn, p.autoStart, critical = true); setBtnStatus(foregroundBtn, p.foregroundService, critical = true); setBtnStatus(batteryBtn, isBatteryExempt, critical = false); setBtnStatus(alwaysOnBtn, isAlwaysOn, critical = true)
         
         val isAdmin = p.controlMode == 2 || isAdminMode
+        val isLocked = isAdmin && !isSettingsUnlocked
+        
         val vis = if (isAdmin) View.VISIBLE else View.GONE
         adminSectionLabel.visibility = vis; adminEmailLabel.visibility = vis; adminEmailEt.visibility = vis
         adminPhoneLabel.visibility = vis; adminPhoneEt.visibility = vis; pinManageBtn.visibility = vis
         
-        val hasKey = p.apiKey.isNotEmpty(); apiKey.isEnabled = !hasKey && p.encryptionWorks && !isAdmin; apiKeyLayout.alpha = if (apiKey.isEnabled) 1.0f else 0.5f; removeApiKeyBtn.visibility = if (hasKey && p.encryptionWorks && !isAdmin) View.VISIBLE else View.GONE
-        if (!p.encryptionWorks) { apiKey.hint = "Security initialization failed"; apiKey.setText("") } else if (hasKey) { apiKey.setText("********"); apiKey.transformationMethod = PasswordTransformationMethod.getInstance() }
+        // Locking Logic
+        val editable = !isLocked
+        protectWifiCb.isEnabled = editable; protectMobileCb.isEnabled = editable; protectOtherCb.isEnabled = editable
+        profile.isEnabled = editable; device.isEnabled = editable && !p.useDeviceName; useDeviceNameCb.isEnabled = editable
+        apiKey.isEnabled = editable && p.apiKey.isEmpty() && p.encryptionWorks; apiKeyLayout.alpha = if (apiKey.isEnabled) 1.0f else 0.5f
+        removeApiKeyBtn.visibility = if (p.apiKey.isNotEmpty() && p.encryptionWorks && editable) View.VISIBLE else View.GONE
+        
+        saveConfigBtn.text = if (isLocked) "Unlock Configuration 🔒" else "Save Configuration 🔓"
+        saveConfigBtn.isEnabled = true 
+        
+        if (!p.encryptionWorks) { apiKey.hint = "Security initialization failed"; apiKey.setText("") } else if (p.apiKey.isNotEmpty()) { apiKey.setText("********"); apiKey.transformationMethod = PasswordTransformationMethod.getInstance() }
         if (p.lastSuccessfulTest > 0) lastTestTv.text = "Last DNS Test: ${SimpleDateFormat("MMM dd, HH:mm", Locale.getDefault()).format(Date(p.lastSuccessfulTest))}"
         else { lastTestTv.text = "Last DNS Test: Never"; updateCircleColor(dnsCheckCircle, "#9E9E9E"); updateCircleColor(browserWarningCircle, "#9E9E9E"); updateCircleColor(connectivityCircle, "#9E9E9E"); updateCircleColor(cloudCircle, "#9E9E9E") }
         
         pinManageBtn.text = if (p.pinHash == null) "Set App PIN" else "Manage App PIN 🔒"; appExclusionBtn.text = "App Exclusions (${p.excludedApps.size}) 🔒"
         adminSwitchBtn.text = if (p.controlMode == 2) "Change to User Setup" else "Change to Admin-controlled setup"
-        saveConfigBtn.isEnabled = !isAdmin || adminEmailEt.isEnabled
-        if (p.controlMode == 1) { adminEmailEt.alpha = 0.3f; adminPhoneEt.alpha = 0.3f; adminEmailEt.isEnabled = false; adminPhoneEt.isEnabled = false } else { adminEmailEt.alpha = 1.0f; adminPhoneEt.alpha = 1.0f }
+        
+        if (p.controlMode == 1) { adminEmailEt.alpha = 0.3f; adminPhoneEt.alpha = 0.3f; adminEmailEt.isEnabled = false; adminPhoneEt.isEnabled = false } 
+        else { adminEmailEt.alpha = 1.0f; adminPhoneEt.alpha = 1.0f; adminEmailEt.isEnabled = editable; adminPhoneEt.isEnabled = editable }
     }
 
     private fun setBtnStatus(btn: Button, ok: Boolean, critical: Boolean) {
@@ -494,7 +536,53 @@ class MainActivity : AppCompatActivity() {
         AlertDialog.Builder(this).setTitle(if (isAuto) "Version Update: Support Report" else "Device Support Report").setMessage(report).setPositiveButton("OK", null).show() }
     private fun checkBatteryOptimizationOnStartup() { val pm = getSystemService(POWER_SERVICE) as PowerManager; if (!pm.isIgnoringBatteryOptimizations(packageName)) { AlertDialog.Builder(this).setTitle("Performance Warning").setMessage("Android may stop DNS Routing in the background if battery optimization is enabled. For reliable automatic DNS Protection, allow DNS Router to run without battery optimization.").setPositiveButton("Disable") { _, _ -> showBatteryDialog() }.setNegativeButton("Later", null).show() } }
     private fun showBatteryDialog() { AlertDialog.Builder(this).setTitle("Background Reliability").setMessage("To prevent the system from killing the VPN service, you must disable battery optimization for DNS Router. On the next screen, find this app and select 'Don't optimize' or 'Unrestricted'.").setPositiveButton("Proceed") { _, _ -> openBatterySettings() }.setNegativeButton("Cancel", null).show() }
-    private fun managePin() { if (p.pinHash == null) showSetPinDialog() else auth { AlertDialog.Builder(this).setTitle("Manage PIN").setItems(arrayOf("Change PIN", "Remove PIN")) { _, which -> if (which == 0) showSetPinDialog() else { p.clearPin(); updateUi(); toast("PIN removed") } }.setNegativeButton("Cancel", null).show() } }
+    private fun managePin() { 
+        if (p.pinHash == null) {
+            showSetPinDialog()
+        } else {
+            AlertDialog.Builder(this)
+                .setTitle("Manage App PIN")
+                .setItems(arrayOf("Change PIN", "Forgot PIN", "Remove PIN ⚠️")) { _, which ->
+                    when (which) {
+                        0 -> auth { showSetPinDialog() }
+                        1 -> forgotPin()
+                        2 -> {
+                            val warning = TextView(this).apply {
+                                text = "WARNING: Removing the PIN will switch the app to USER SETUP mode. All settings will be UNLOCKED and administrator contact info will be REMOVED.\n\nProceed with removal?"
+                                setTextColor(Color.RED)
+                                setPadding(60, 40, 60, 40)
+                            }
+                            AlertDialog.Builder(this)
+                                .setTitle("Remove App PIN?")
+                                .setView(warning)
+                                .setPositiveButton("Remove PIN") { _, _ ->
+                                    AlertDialog.Builder(this)
+                                        .setTitle("Final Confirmation")
+                                        .setMessage("Are you absolutely sure you want to remove the PIN and revert to User Setup?")
+                                        .setPositiveButton("YES, REMOVE") { _, _ ->
+                                            auth {
+                                                p.clearPin()
+                                                p.adminEmail = ""
+                                                p.adminPhone = ""
+                                                p.controlMode = 1
+                                                isSettingsUnlocked = false
+                                                buildUi()
+                                                updateUi()
+                                                toast("PIN removed. App is now in User Setup.")
+                                            }
+                                        }
+                                        .setNegativeButton("Cancel", null)
+                                        .show()
+                                }
+                                .setNegativeButton("Cancel", null)
+                                .show()
+                        }
+                    }
+                }
+                .setNegativeButton("Cancel", null)
+                .show()
+        }
+    }
     private fun showSetPinDialog(onSaved: (() -> Unit)? = null) {
         val container = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(48, 16, 48, 16) }
         val pin1 = EditText(this).apply { inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD; hint = "New PIN (4–12 digits)" }
