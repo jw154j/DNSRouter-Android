@@ -135,19 +135,19 @@ class MainActivity : AppCompatActivity() {
         }
 
         root.addView(TextView(this).apply {
-            text = "Welcome to DNS Router"; textSize = 28f
+            text = getString(R.string.welcome_to_dns_router); textSize = 28f
             typeface = Typeface.DEFAULT_BOLD; gravity = Gravity.CENTER
             setPadding(0, 0, 0, 20); setTextColor(if (isDark) Color.WHITE else Color.BLACK)
         })
 
         root.addView(TextView(this).apply {
-            text = "Select your setup type to continue."; textSize = 16f
+            text = getString(R.string.select_setup_type); textSize = 16f
             gravity = Gravity.CENTER; setPadding(0, 0, 0, 100); setTextColor(if (isDark) Color.LTGRAY else Color.GRAY)
         })
 
         // User Setup Option
         val userBtn = Button(this).apply {
-            text = "USER SETUP\n(I control this device)"; textSize = 18f
+            text = getString(R.string.user_setup_text); textSize = 18f
             setPadding(40, 60, 40, 60); setAllCaps(true)
             val btnColor = if (isDark) "#2C2C2C" else "#E0E0E0"
             setBackgroundColor(btnColor.toColorInt())
@@ -166,7 +166,7 @@ class MainActivity : AppCompatActivity() {
 
         // Admin Setup Option
         val adminBtn = Button(this).apply {
-            text = "ADMIN SETUP\n(Managed Device)"; textSize = 18f
+            text = getString(R.string.admin_setup_text); textSize = 18f
             setPadding(40, 60, 40, 60); setAllCaps(true)
             val btnColor = if (isDark) "#1976D2" else "#BBDEFB"
             setBackgroundColor(btnColor.toColorInt())
@@ -245,8 +245,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun buildUi() {
         val isDark = (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
-        val cardBg = if (isDark) "#1FFFFFFF".toColorInt() else Color.parseColor("#08000000")
-        val statusBg = if (isDark) "#2FFFFFFF".toColorInt() else Color.parseColor("#10000000")
+        val cardBg = if (isDark) "#1FFFFFFF".toColorInt() else "#08000000".toColorInt()
+        val statusBg = if (isDark) "#2FFFFFFF".toColorInt() else "#10000000".toColorInt()
         
         val root = ScrollView(this).apply { isFillViewport = true }
         val container = LinearLayout(this).apply { 
@@ -481,7 +481,7 @@ class MainActivity : AppCompatActivity() {
     private fun createReliabilityRow(label: String, circle: View): View { val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(0, 4, 0, 4) }
         row.addView(TextView(this).apply { text = label; textSize = 14f; layoutParams = LinearLayout.LayoutParams(0, -2, 1f) })
         circle.layoutParams = LinearLayout.LayoutParams(24, 24); row.addView(circle); return row }
-    private fun updateCircleColor(view: View, colorStr: String) { val shape = GradientDrawable(); shape.shape = GradientDrawable.OVAL; shape.setColor(Color.parseColor(colorStr)); view.background = shape }
+    private fun updateCircleColor(view: View, colorStr: String) { val shape = GradientDrawable(); shape.shape = GradientDrawable.OVAL; shape.setColor(colorStr.toColorInt()); view.background = shape }
     private fun createRow() = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; layoutParams = LinearLayout.LayoutParams(-1, -2) }
     private fun createGridButton(label: String, onClick: () -> Unit) = Button(this).apply { 
         text = label
@@ -567,7 +567,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun showSupportOptions() { AlertDialog.Builder(this).setTitle("Support Options").setItems(arrayOf("General Support Request", "Request App Exclusion")) { _, which -> if (which == 0) contactAdmin("General Support Request") else requestAppExclusion() }.setNegativeButton("Cancel", null).show() }
     private fun manageAppExclusions() {
-        val items = p.excludedApps.sorted()
+        val items = p.excludedApps.sorted().toList()
         val adapter = object : ArrayAdapter<String>(this, android.R.layout.simple_list_item_1, items) {
             override fun getView(pos: Int, v: View?, parent: ViewGroup): View { val tv = super.getView(pos, v, parent) as TextView; val pkg = getItem(pos)!!; try { val label = packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)); tv.text = "$label ($pkg)" } catch (_: Exception) {}; return tv }
         }
@@ -577,7 +577,7 @@ class MainActivity : AppCompatActivity() {
         dialog.show()
     }
     private fun showAppPicker(onSelected: (String) -> Unit) {
-        val apps = packageManager.getInstalledApplications(0).asSequence().filter { (it.flags and ApplicationInfo.FLAG_SYSTEM) == 0 }.sortedBy { packageManager.getApplicationLabel(it).toString() }.toList()
+        val apps = packageManager.getInstalledPackages(PackageManager.GET_META_DATA).asSequence().mapNotNull { it.applicationInfo }.filter { (it.flags and ApplicationInfo.FLAG_SYSTEM) == 0 }.sortedBy { packageManager.getApplicationLabel(it).toString() }.toList()
         val labels = apps.map { "${packageManager.getApplicationLabel(it)} (${it.packageName})" }.toTypedArray()
         AlertDialog.Builder(this).setTitle("Select App").setItems(labels) { _, which -> onSelected(apps[which].packageName) }.show()
     }
@@ -757,7 +757,7 @@ class MainActivity : AppCompatActivity() {
     private fun fetchNextDnsStats(profile: String, key: String): String { return try { val url = URL("https://api.nextdns.io/profiles/$profile/analytics/status"); val conn = url.openConnection() as HttpURLConnection; conn.setRequestProperty("X-Api-Key", key); conn.connectTimeout = 10000; conn.readTimeout = 10000; if (conn.responseCode == 200) parseAnalyticsStatus(conn.inputStream.bufferedReader().readText()) else "Error ${conn.responseCode}: ${conn.responseMessage}" } catch (e: Exception) { "Error: ${e.message}" } }
     private fun parseAnalyticsStatus(json: String): String { val total = Regex("\"totalQueries\":\\s*(\\d+)").find(json)?.groupValues?.get(1) ?: "0"; val blocked = Regex("\"blockedQueries\":\\s*(\\d+)").find(json)?.groupValues?.get(1) ?: "0"; return "Total Queries: $total\nBlocked: $blocked" }
     private fun showSetup() { AlertDialog.Builder(this).setTitle("Always-On VPN Protection").setMessage("Highly Recommended: Enabling 'Always-on VPN' in Android settings ensures DNS Router is automatically managed by the system.\n\nRisk: If NOT enabled, DNS queries may bypass NextDNS during network transitions or if the app is stopped.\n\nOptional: 'Block connections without VPN' (Lockdown) provides strict protection by disabling internet if the VPN is not connected.").setPositiveButton("Open Settings") { _, _ -> try { startActivity(Intent(Settings.ACTION_VPN_SETTINGS)) } catch (_: Exception) {} }.setNegativeButton("Close", null).show() }
-    private fun openBatterySettings() { try { startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).setData("package:$packageName".toUri())) } catch (_: Exception) { startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) } }
+    private fun openBatterySettings() { try { startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) } catch (_: Exception) {} }
     private fun requestWifiPermission() { if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) { locationPermission.launch(Manifest.permission.ACCESS_FINE_LOCATION) } else { checkNotificationPermissionOnStartup() } }
     @Suppress("DEPRECATION")
     private fun currentSsid(): String? = try { val wm = getSystemService(WIFI_SERVICE) as android.net.wifi.WifiManager; wm.connectionInfo.ssid?.trim('\"')?.takeUnless { it.isBlank() || it == "<unknown ssid>" } } catch (_: Exception) { null }

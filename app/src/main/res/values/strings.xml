@@ -1,1 +1,11 @@
-<resources><string name="app_name">DNS Router</string></resources>
+<resources>
+    <string name="app_name">DNS Router</string>
+    <string name="dns_activity_log">DNS Activity Log</string>
+    <string name="clear_log">Clear Log</string>
+    <string name="refresh">Refresh</string>
+    <string name="welcome_to_dns_router">Welcome to DNS Router</string>
+    <string name="user_setup_text">USER SETUP\n(I control this device)</string>
+    <string name="log_entry_format">%1$s %2$s - %3$s</string>
+    <string name="select_setup_type">Select your setup type to continue.</string>
+    <string name="admin_setup_text">ADMIN SETUP\n(Managed Device)</string>
+</resources>

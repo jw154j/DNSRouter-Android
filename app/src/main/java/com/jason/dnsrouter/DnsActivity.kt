@@ -36,7 +36,7 @@ class DnsActivity : AppCompatActivity() {
         }
 
         val header = TextView(this).apply {
-            text = "DNS Activity Log"
+            text = getString(R.string.dns_activity_log)
             textSize = 24f
             typeface = Typeface.DEFAULT_BOLD
             layoutParams = LinearLayout.LayoutParams(0, -2, 1f)
@@ -44,12 +44,14 @@ class DnsActivity : AppCompatActivity() {
         }
         headerRow.addView(header)
 
-        headerRow.addView(ImageButton(this).apply {
-            setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
-            setBackgroundColor(Color.TRANSPARENT)
-            setColorFilter(if (isDark) Color.WHITE else Color.BLACK)
-            setOnClickListener { finish() }
-        })
+        headerRow.addView(
+            ImageButton(this).apply {
+                setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
+                setBackgroundColor(Color.TRANSPARENT)
+                setColorFilter(if (isDark) Color.WHITE else Color.BLACK)
+                setOnClickListener { finish() }
+            },
+        )
         root.addView(headerRow)
 
         statsContainer = LinearLayout(this).apply {
@@ -71,18 +73,22 @@ class DnsActivity : AppCompatActivity() {
             setPadding(0, 32, 0, 0)
         }
         
-        btnRow.addView(Button(this).apply {
-            text = "Clear Log"
-            setOnClickListener {
-                stats.clear()
-                refresh()
-            }
-        })
+        btnRow.addView(
+            Button(this).apply {
+                text = getString(R.string.clear_log)
+                setOnClickListener {
+                    stats.clear()
+                    refresh()
+                }
+            },
+        )
 
-        btnRow.addView(Button(this).apply {
-            text = "Refresh"
-            setOnClickListener { refresh() }
-        })
+        btnRow.addView(
+            Button(this).apply {
+                text = getString(R.string.refresh)
+                setOnClickListener { refresh() }
+            },
+        )
         
         root.addView(btnRow)
         setContentView(root)
@@ -134,7 +140,7 @@ class DnsActivity : AppCompatActivity() {
                     "excluded" -> "EXCLUDED"
                     else -> item.status.uppercase()
                 }
-                text2.text = "$symbol $time - $displayStatus"
+                text2.text = getString(R.string.log_entry_format, symbol, time, displayStatus)
                 text2.setTextColor(color)
                 text2.typeface = Typeface.DEFAULT_BOLD
                 return view
@@ -150,18 +156,22 @@ class DnsActivity : AppCompatActivity() {
             layoutParams = LinearLayout.LayoutParams(0, -2, 1f)
             gravity = Gravity.CENTER
         }
-        container.addView(TextView(this).apply { 
-            text = label
-            textSize = 12f
-            alpha = 0.7f
-            setTextColor(if (isDark) Color.WHITE else Color.BLACK)
-        })
-        container.addView(TextView(this).apply { 
-            text = value
-            textSize = 18f
-            typeface = Typeface.DEFAULT_BOLD
-            setTextColor(if (isDark) Color.WHITE else Color.BLACK)
-        })
+        container.addView(
+            TextView(this).apply { 
+                text = label
+                textSize = 12f
+                alpha = 0.7f
+                setTextColor(if (isDark) Color.WHITE else Color.BLACK)
+            },
+        )
+        container.addView(
+            TextView(this).apply { 
+                text = value
+                textSize = 18f
+                typeface = Typeface.DEFAULT_BOLD
+                setTextColor(if (isDark) Color.WHITE else Color.BLACK)
+            },
+        )
         statsContainer.addView(container)
     }
 }
