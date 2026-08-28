@@ -6,6 +6,7 @@ import android.content.*
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.graphics.Color
+import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.net.VpnService
 import android.os.*
@@ -57,6 +58,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var adminPhoneLabel: TextView
 
     private var isAdminMode = false
+    private var setupDialog: Dialog? = null
 
     private lateinit var alwaysOnCircle: View
     private lateinit var batteryCircle: View
@@ -76,33 +78,137 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(b: Bundle?) {
         super.onCreate(b); p = Prefs(this)
         isAdminMode = isAppManaged()
+        
+        // Validation: If Admin mode was chosen but setup was never finished (no PIN or contact info), reset to 0.
+        if (p.controlMode == 2 && (p.pinHash == null || p.adminEmail.isBlank() || p.adminPhone.isBlank())) {
+            p.controlMode = 0
+            p.clearPin()
+            p.adminEmail = ""
+            p.adminPhone = ""
+        }
+
         if (p.controlMode == 0 && !isAdminMode) {
             showControlModeSelection()
         } else {
             if (isAdminMode) p.controlMode = 2
-            buildUi(); checkVersionAndReport(); requestWifiPermission()
+            startMainApp()
         }
     }
 
+    private fun startMainApp() {
+        buildUi(); checkVersionAndReport(); requestWifiPermission()
+    }
+
     private fun showControlModeSelection() {
-        val options = arrayOf(
-            "User Setup: You control DNS Router settings on this device.",
-            "Admin-controlled setup: A network administrator controls DNS Router settings on this device. Some settings will be locked and can only be changed with the administrator PIN."
-        )
+        val dialog = Dialog(this, android.R.style.Theme_Material_Light_NoActionBar_Fullscreen)
+        setupDialog = dialog
+        
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(80, 40, 80, 40)
+            setBackgroundColor(Color.WHITE)
+        }
+
+        root.addView(TextView(this).apply {
+            text = "Welcome to DNS Router"; textSize = 28f
+            typeface = Typeface.DEFAULT_BOLD; gravity = Gravity.CENTER
+            setPadding(0, 0, 0, 20); setTextColor(Color.BLACK)
+        })
+
+        root.addView(TextView(this).apply {
+            text = "Select your setup type to continue."; textSize = 16f
+            gravity = Gravity.CENTER; setPadding(0, 0, 0, 100)
+        })
+
+        // User Setup Option
+        val userBtn = Button(this).apply {
+            text = "USER SETUP\n(I control this device)"; textSize = 18f
+            setPadding(40, 60, 40, 60); setAllCaps(true)
+            setBackgroundColor(Color.parseColor("#E0E0E0"))
+            setOnClickListener {
+                p.controlMode = 1
+                dialog.dismiss()
+                startMainApp()
+            }
+        }
+        root.addView(userBtn)
+        root.addView(TextView(this).apply {
+            text = "You control DNS Router settings on this device."; textSize = 13f
+            gravity = Gravity.CENTER; setPadding(0, 10, 0, 80)
+        })
+
+        // Admin Setup Option
+        val adminBtn = Button(this).apply {
+            text = "ADMIN SETUP\n(Managed Device)"; textSize = 18f
+            setPadding(40, 60, 40, 60); setAllCaps(true)
+            setBackgroundColor(Color.parseColor("#BBDEFB"))
+            setOnClickListener {
+                startAdminSetupFlow(dialog)
+            }
+        }
+        root.addView(adminBtn)
+        root.addView(TextView(this).apply {
+            text = "A network administrator controls settings. PIN and contact info required."; textSize = 13f
+            gravity = Gravity.CENTER; setPadding(0, 10, 0, 0)
+        })
+
+        dialog.setContentView(root)
+        dialog.setCancelable(false)
+        dialog.show()
+    }
+
+    private fun startAdminSetupFlow(parentDialog: Dialog) {
+        // Step 1: Set PIN
+        showSetPinDialog {
+            // Step 2: Mandatory Contact Info
+            showAdminContactSetupDialog {
+                p.controlMode = 2
+                parentDialog.dismiss()
+                startMainApp()
+                toast("Admin Setup Complete")
+            }
+        }
+    }
+
+    private fun showAdminContactSetupDialog(onComplete: () -> Unit) {
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; setPadding(60, 40, 60, 40)
+        }
+        container.addView(TextView(this).apply { text = "Administrator Contact Info"; textSize = 20f; setPadding(0, 0, 0, 20) })
+        container.addView(TextView(this).apply { text = "Both email and phone are mandatory for Admin Mode."; textSize = 14f; setPadding(0, 0, 0, 40) })
+
+        val emailEt = EditText(this).apply { hint = "Admin Email"; isSingleLine = true; inputType = InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS }
+        val phoneEt = EditText(this).apply { hint = "Admin Phone"; isSingleLine = true; inputType = InputType.TYPE_CLASS_PHONE }
+        container.addView(emailEt); container.addView(phoneEt)
+
         AlertDialog.Builder(this)
-            .setTitle("Initial Setup: Select Control Mode")
+            .setTitle("Step 2: Admin Contact")
+            .setView(container)
             .setCancelable(false)
-            .setItems(options) { _, which ->
-                p.controlMode = which + 1
-                if (p.controlMode == 2) {
-                    showSetPinDialog { buildUi(); requestWifiPermission(); toast("Admin mode active. PIN, Email, and Phone required.") }
-                } else {
-                    buildUi(); requestWifiPermission()
+            .setPositiveButton("Finish Setup", null)
+            .create().apply {
+                setOnShowListener {
+                    getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                        val e = emailEt.text.toString().trim()
+                        val ph = phoneEt.text.toString().trim()
+                        if (e.isEmpty() || ph.isEmpty()) {
+                            toast("Both fields are required")
+                        } else {
+                            p.adminEmail = e
+                            p.adminPhone = ph
+                            dismiss()
+                            onComplete()
+                        }
+                    }
                 }
             }.show()
     }
 
-    override fun onResume() { super.onResume(); if (p.controlMode != 0 || isAdminMode) updateUi() }
+    override fun onResume() { 
+        super.onResume()
+        if (p.controlMode != 0 || isAdminMode) updateUi() 
+    }
 
     private fun checkVersionAndReport() {
         val currentVersion = try { packageManager.getPackageInfo(packageName, 0).versionCode } catch (_: Exception) { 0 }
@@ -214,7 +320,7 @@ class MainActivity : AppCompatActivity() {
                 if (p.controlMode == 2) {
                     auth {
                         AlertDialog.Builder(this@MainActivity)
-                            .setTitle("Revert to User Control?")
+                            .setTitle("Change to User Setup?")
                             .setMessage("WARNING: All settings will become unlocked and the PIN will be invalidated. Email and Phone data will be removed. Proceed?")
                             .setPositiveButton("Proceed") { _, _ ->
                                 p.clearPin(); p.adminEmail = ""; p.adminPhone = ""
@@ -225,7 +331,12 @@ class MainActivity : AppCompatActivity() {
                             .show()
                     }
                 } else {
-                    showSetPinDialog { p.controlMode = 2; buildUi(); updateUi(); toast("Now in Admin Control Mode. Contact info required.") }
+                    showSetPinDialog { 
+                        showAdminContactSetupDialog {
+                            p.controlMode = 2; buildUi(); updateUi()
+                            toast("Now in Admin-controlled setup.")
+                        }
+                    }
                 }
             } 
         }
@@ -339,8 +450,7 @@ class MainActivity : AppCompatActivity() {
         val report = buildString { append("CORE SERVICES (Required)\n• DNS-only VPN: Core Support\n• NextDNS DoH: Core Support\n• Encrypted Storage: ${if (p.encryptionWorks) "Required (Active)" else "FAILED"}\n\n")
             append("RECOMMENDED (For Reliability)\n• Always-On VPN: ${if (isAlwaysOnVpnEnabled()) "Active" else "Highly Recommended"}\n• Battery Exemption: ${if (isBatteryExempt) "Active" else "Recommended"}\n• Boot Auto-Start: ${if (p.autoStart) "Active" else "Use"}\n• Foreground Service: ${if (p.foregroundService) "Active" else "Use"}\n\n")
             append("OPTIONAL (Features)\n• NextDNS API: ${if (p.apiKey.isNotEmpty()) "Configured" else "Optional"}\n• Wi-Fi Exclusions: ${if (p.excluded.isNotEmpty()) "In Use (${p.excluded.size})" else "Optional"}\n• PIN Protection: ${if (p.pinHash != null) "Active" else "Optional"}") }
-        AlertDialog.Builder(this).setTitle(if (isAuto) "Version Update: Support Report" else "Device Support Report").setMessage(report).setPositiveButton("OK", null).show()
-    }
+        AlertDialog.Builder(this).setTitle(if (isAuto) "Version Update: Support Report" else "Device Support Report").setMessage(report).setPositiveButton("OK", null).show() }
     private fun checkBatteryOptimizationOnStartup() { val pm = getSystemService(POWER_SERVICE) as PowerManager; if (Build.VERSION.SDK_INT >= 23 && !pm.isIgnoringBatteryOptimizations(packageName)) { AlertDialog.Builder(this).setTitle("Performance Warning").setMessage("Android may stop DNS Routing in the background if battery optimization is enabled. For reliable automatic DNS Protection, allow DNS Router to run without battery optimization.").setPositiveButton("Disable") { _, _ -> showBatteryDialog() }.setNegativeButton("Later", null).show() } }
     private fun showBatteryDialog() { AlertDialog.Builder(this).setTitle("Background Reliability").setMessage("To prevent the system from killing the VPN service, you must disable battery optimization for DNS Router. On the next screen, find this app and select 'Don't optimize' or 'Unrestricted'.").setPositiveButton("Proceed") { _, _ -> openBatterySettings() }.setNegativeButton("Cancel", null).show() }
     private fun managePin() { if (p.pinHash == null) showSetPinDialog() else auth { AlertDialog.Builder(this).setTitle("Manage PIN").setItems(arrayOf("Change PIN", "Remove PIN")) { _, which -> if (which == 0) showSetPinDialog() else { p.clearPin(); updateUi(); toast("PIN removed") } }.setNegativeButton("Cancel", null).show() } }
