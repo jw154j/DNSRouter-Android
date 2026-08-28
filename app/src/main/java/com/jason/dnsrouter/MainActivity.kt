@@ -19,7 +19,6 @@ import android.text.method.PasswordTransformationMethod
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
-import android.view.inputmethod.InputMethodManager
 import android.widget.*
 import java.net.HttpURLConnection
 import java.net.InetAddress
@@ -54,6 +53,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var adminEmailEt: EditText
     private lateinit var adminPhoneEt: EditText
     private lateinit var saveConfigBtn: Button
+    private lateinit var saveAdminBtn: Button
     private lateinit var wifiExclusionBtn: Button
     
     private lateinit var protectWifiCb: CheckBox
@@ -65,7 +65,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var adminPhoneLabel: TextView
 
     private var isAdminMode = false
-    private var isSettingsUnlocked = false
+    private var isConfigUnlocked = false
+    private var isAdminSettingsUnlocked = false
     private var setupDialog: Dialog? = null
     private var isUiBuilt = false
 
@@ -247,13 +248,13 @@ class MainActivity : AppCompatActivity() {
         val root = ScrollView(this).apply { isFillViewport = true }
         val container = LinearLayout(this).apply { 
             orientation = LinearLayout.VERTICAL
-            setPadding(32, 28, 32, 120 * (resources.displayMetrics.density).toInt())
+            setPadding(32, 80, 32, 120 * (resources.displayMetrics.density).toInt())
         }
         root.addView(container)
         val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         header.addView(TextView(this).apply { text = "DNS Router"; textSize = 30f; layoutParams = LinearLayout.LayoutParams(0, -2, 1f) })
         if (p.controlMode == 2 || isAdminMode) header.addView(Button(this).apply { text = "Support"; textSize = 12f; setOnClickListener { showSupportOptions() } })
-        header.addView(Button(this).apply { text = "Report"; textSize = 12f; setOnClickListener { showCompatibilityReport(isAuto = false) } })
+        header.addView(Button(this).apply { text = "View Report"; textSize = 12f; setOnClickListener { showCompatibilityReport(isAuto = false) } })
         container.addView(header)
         if (isAdminMode || p.controlMode == 2) container.addView(TextView(this).apply { text = "NETWORK ADMIN MODE ACTIVE"; setTextColor(Color.RED); textSize = 12f; gravity = Gravity.CENTER; setPadding(0, 0, 0, 8) })
         status = TextView(this).apply { textSize = 16f; setPadding(0, 12, 0, 12) }; container.addView(status)
@@ -276,26 +277,30 @@ class MainActivity : AppCompatActivity() {
         lastTestTv = TextView(this).apply { textSize = 12f; setPadding(0, 8, 0, 8); alpha = 0.7f }; secCard.addView(lastTestTv)
         secCard.addView(Button(this).apply { text = "Run Security Tests"; textSize = 12f; setOnClickListener { runSecurityTests() } }); container.addView(secCard)
         systemStatus = TextView(this).apply { textSize = 14f; setPadding(24, 16, 24, 16); setBackgroundColor(statusBg) }; container.addView(systemStatus)
-        container.addView(TextView(this).apply { text = "Setup & Protection"; textSize = 18f; setPadding(0, 24, 0, 8) })
+        
+        val isAdmin = p.controlMode == 2 || isAdminMode
+        val setupHeader = TextView(this).apply { text = "Setup & Protection${if (isAdmin) " 🔒" else ""}"; textSize = 18f; setPadding(0, 24, 0, 8) }
+        container.addView(setupHeader)
         val grid = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val row1 = createRow()
-        toggleBtn = createGridButton("DNS Protection") { val desired = !p.enabled; auth { p.enabled = desired; if (desired) requestVpn() else stopVpn(); updateUi() } }
-        autoStartBtn = createGridButton("Auto-Start") { if (isAdminMode || p.controlMode == 2) { toast("Managed by Administrator"); return@createGridButton }; p.autoStart = !p.autoStart; updateUi(); toast("Auto-start ${if (p.autoStart) "enabled" else "disabled"}") }
+        toggleBtn = createGridButton("DNS Protection") { auth { val desired = !p.enabled; p.enabled = desired; if (desired) requestVpn() else stopVpn(); updateUi() } }
+        autoStartBtn = createGridButton("Auto-Start") { auth { if (isAdminMode || p.controlMode == 2) { toast("Managed by Administrator"); return@auth }; p.autoStart = !p.autoStart; updateUi(); toast("Auto-start ${if (p.autoStart) "enabled" else "disabled"}") } }
         row1.addView(toggleBtn); row1.addView(autoStartBtn); grid.addView(row1)
         val row2 = createRow()
-        foregroundBtn = createGridButton("Foreground") { if (isAdminMode || p.controlMode == 2) { toast("Managed by Administrator"); return@createGridButton }; p.foregroundService = !p.foregroundService; updateUi(); toast("Foreground mode ${if (p.foregroundService) "ON" else "OFF"}") }
-        batteryBtn = createGridButton("Battery Opt") { showBatteryDialog() }
+        foregroundBtn = createGridButton("Foreground") { auth { if (isAdminMode || p.controlMode == 2) { toast("Managed by Administrator"); return@auth }; p.foregroundService = !p.foregroundService; updateUi(); toast("Foreground mode ${if (p.foregroundService) "ON" else "OFF"}") } }
+        batteryBtn = createGridButton("Battery Opt") { auth { showBatteryDialog() } }
         row2.addView(foregroundBtn); row2.addView(batteryBtn); grid.addView(row2)
         container.addView(TextView(this).apply { text = "Note: Foreground service keeps the DNS protection active but does not mean the app screen is running."; textSize = 11f; alpha = 0.6f; setPadding(8, 0, 8, 0) })
         val row3 = createRow()
-        alwaysOnBtn = createGridButton("Always-On VPN") { showSetup() }
-        wifiExclusionBtn = createGridButton("Wi-Fi Excl.") { if (isAdminMode || p.controlMode == 2) { toast("Managed by Administrator"); return@createGridButton }; auth { editExclusions() } }
+        alwaysOnBtn = createGridButton("Always-On VPN (Inc. Lockdown)") { auth { showSetup() } }
+        wifiExclusionBtn = createGridButton("Wi-Fi Excl.") { auth { if (isAdminMode || p.controlMode == 2) { toast("Managed by Administrator"); return@auth }; editExclusions() } }
         row3.addView(alwaysOnBtn); row3.addView(wifiExclusionBtn); grid.addView(row3); container.addView(grid)
         
-        appExclusionBtn = Button(this).apply { text = "App Exclusions 🔒"; setOnClickListener { auth { manageAppExclusions() } } }
+        appExclusionBtn = Button(this).apply { text = "App Exclusions"; setOnClickListener { auth { manageAppExclusions() } } }
         container.addView(appExclusionBtn)
 
-        container.addView(TextView(this).apply { text = "NextDNS Configuration"; textSize = 18f; setPadding(0, 32, 0, 8) })
+        val configHeader = TextView(this).apply { text = "NextDNS Configuration${if (isAdmin) " 🔒" else ""}"; textSize = 18f; setPadding(0, 32, 0, 8) }
+        container.addView(configHeader)
         container.addView(TextView(this).apply { text = "Select networks to protect with NextDNS. Unselected networks will bypass the VPN tunnel."; textSize = 12f; alpha = 0.7f; setPadding(0, 0, 0, 8) })
         protectWifiCb = CheckBox(this).apply { text = "Protect Wi-Fi Networks"; isChecked = p.protectWifi; setOnCheckedChangeListener { _, isChecked -> p.protectWifi = isChecked; updateUi() } }
         container.addView(protectWifiCb)
@@ -322,42 +327,48 @@ class MainActivity : AppCompatActivity() {
         removeApiKeyBtn = Button(this).apply { text = "Remove API Key"; setOnClickListener { auth { p.apiKey = ""; apiKey.setText(""); updateUi(); toast("API Key removed") } } }
         container.addView(removeApiKeyBtn)
         
-        adminSectionLabel = TextView(this).apply { text = "Administrator Settings"; textSize = 18f; setPadding(0, 24, 0, 8) }
+        saveConfigBtn = Button(this).apply { 
+            setOnClickListener { 
+                val adminModeCheck = p.controlMode == 2 || isAdminMode
+                if (adminModeCheck && !isConfigUnlocked) {
+                    auth { isConfigUnlocked = true; updateUi(); toast("Configuration Unlocked") }
+                    return@setOnClickListener
+                }
+                auth { 
+                    p.profile = profile.text.toString().trim(); p.manualDeviceName = device.text.toString().trim(); p.useDeviceName = useDeviceNameCb.isChecked
+                    if (apiKey.isEnabled && apiKey.text.isNotEmpty() && apiKey.text.toString() != "********") p.apiKey = apiKey.text.toString().trim()
+                    toast("Configuration saved"); isConfigUnlocked = false; updateUi()
+                } 
+            }
+        }.apply { setPadding(0, 20, 0, 20) }; container.addView(saveConfigBtn)
+        
+        adminSectionLabel = TextView(this).apply { text = "Administrator Settings${if (isAdmin) " 🔒" else ""}"; textSize = 18f; setPadding(0, 24, 0, 8) }
         container.addView(adminSectionLabel)
         adminEmailLabel = TextView(this).apply { text = "Administrator Email (Required for support)"; setPadding(0, 8, 0, 4) }
         container.addView(adminEmailLabel)
-        adminEmailEt = EditText(this).apply { hint = "admin@example.com"; setText(p.adminEmail); isSingleLine = true; isEnabled = false; setAutofillHints(View.AUTOFILL_HINT_EMAIL_ADDRESS)
-            setOnClickListener { if (!isEnabled && !isAdminMode && p.controlMode == 2) auth { isEnabled = true; adminPhoneEt.isEnabled = true; requestFocus(); val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager; imm.showSoftInput(this, 0) } } }
+        adminEmailEt = EditText(this).apply { hint = "admin@example.com"; setText(p.adminEmail); isSingleLine = true; isEnabled = false; setAutofillHints(View.AUTOFILL_HINT_EMAIL_ADDRESS) }
         container.addView(adminEmailEt)
         adminPhoneLabel = TextView(this).apply { text = "Administrator Phone (Required for support)"; setPadding(0, 16, 0, 4) }
         container.addView(adminPhoneLabel)
-        adminPhoneEt = EditText(this).apply { hint = "+1234567890"; setText(p.adminPhone); isSingleLine = true; inputType = InputType.TYPE_CLASS_PHONE; isEnabled = false; setAutofillHints(View.AUTOFILL_HINT_PHONE)
-            setOnClickListener { if (!isEnabled && !isAdminMode && p.controlMode == 2) auth { isEnabled = true; adminEmailEt.isEnabled = true; requestFocus(); val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager; imm.showSoftInput(this, 0) } } }
+        adminPhoneEt = EditText(this).apply { hint = "+1234567890"; setText(p.adminPhone); isSingleLine = true; inputType = InputType.TYPE_CLASS_PHONE; isEnabled = false; setAutofillHints(View.AUTOFILL_HINT_PHONE) }
         container.addView(adminPhoneEt)
         
-        saveConfigBtn = Button(this).apply { 
+        saveAdminBtn = Button(this).apply { 
             setOnClickListener { 
-                val isAdmin = p.controlMode == 2 || isAdminMode
-                if (isAdmin && !isSettingsUnlocked) {
-                    auth { 
-                        isSettingsUnlocked = true
-                        updateUi()
-                        toast("Settings Unlocked")
-                    }
+                val adminModeCheck = p.controlMode == 2 || isAdminMode
+                if (adminModeCheck && !isAdminSettingsUnlocked) {
+                    auth { isAdminSettingsUnlocked = true; updateUi(); toast("Admin Settings Unlocked") }
                     return@setOnClickListener
                 }
-                
                 auth { 
                     val email = adminEmailEt.text.toString().trim(); val phone = adminPhoneEt.text.toString().trim()
-                    val hasEmail = email.isNotEmpty(); val hasPhone = phone.isNotEmpty()
-                    if (p.controlMode == 2 && (hasEmail != hasPhone)) { toast("Email and Phone are both required if one is provided"); return@auth }
-                    if (p.controlMode == 2 && (!hasEmail || !hasPhone)) { toast("Email and Phone are both mandatory in Admin mode"); return@auth }
-                    p.profile = profile.text.toString().trim(); p.manualDeviceName = device.text.toString().trim(); p.useDeviceName = useDeviceNameCb.isChecked; p.adminEmail = email; p.adminPhone = phone
-                    if (apiKey.isEnabled && apiKey.text.isNotEmpty() && apiKey.text.toString() != "********") p.apiKey = apiKey.text.toString().trim()
-                    toast("Configuration saved"); isSettingsUnlocked = false; updateUi()
-                } 
+                    if (p.controlMode == 2 && (email.isEmpty() || phone.isEmpty())) { toast("Email and Phone are both mandatory in Admin mode"); return@auth }
+                    p.adminEmail = email; p.adminPhone = phone
+                    toast("Admin settings saved"); isAdminSettingsUnlocked = false; updateUi()
+                }
             }
-        }.apply { text = "Save Configuration 🔒"; setPadding(0, 20, 0, 20) }; container.addView(saveConfigBtn)
+        }.apply { setPadding(0, 20, 0, 20) }
+        container.addView(saveAdminBtn)
         
         adminSwitchBtn = Button(this).apply { 
             setOnClickListener { 
@@ -372,7 +383,7 @@ class MainActivity : AppCompatActivity() {
                                     .setMessage("Confirm switching to User Setup? This action cannot be undone without re-running Admin Setup.")
                                     .setPositiveButton("Confirm Switch") { _, _ ->
                                         p.clearPin(); p.adminEmail = ""; p.adminPhone = ""
-                                        p.controlMode = 1; buildUi(); updateUi()
+                                        p.controlMode = 1; isConfigUnlocked = false; isAdminSettingsUnlocked = false; buildUi(); updateUi()
                                         toast("Switched to User Control")
                                     }
                                     .setNegativeButton("Cancel", null)
@@ -437,31 +448,43 @@ class MainActivity : AppCompatActivity() {
         setBtnStatus(toggleBtn, p.enabled, critical = true); setBtnStatus(autoStartBtn, p.autoStart, critical = true); setBtnStatus(foregroundBtn, p.foregroundService, critical = true); setBtnStatus(batteryBtn, isBatteryExempt, critical = false); setBtnStatus(alwaysOnBtn, isAlwaysOn, critical = true)
         
         val isAdmin = p.controlMode == 2 || isAdminMode
-        val isLocked = isAdmin && !isSettingsUnlocked
+        val isConfigLocked = isAdmin && !isConfigUnlocked
+        val isAdminSettingsLockedState = isAdmin && !isAdminSettingsUnlocked
         
         val vis = if (isAdmin) View.VISIBLE else View.GONE
         adminSectionLabel.visibility = vis; adminEmailLabel.visibility = vis; adminEmailEt.visibility = vis
         adminPhoneLabel.visibility = vis; adminPhoneEt.visibility = vis; pinManageBtn.visibility = vis
         
-        // Locking Logic
-        val editable = !isLocked
-        protectWifiCb.isEnabled = editable; protectMobileCb.isEnabled = editable; protectOtherCb.isEnabled = editable
-        profile.isEnabled = editable; device.isEnabled = editable && !p.useDeviceName; useDeviceNameCb.isEnabled = editable
-        apiKey.isEnabled = editable && p.apiKey.isEmpty() && p.encryptionWorks; apiKeyLayout.alpha = if (apiKey.isEnabled) 1.0f else 0.5f
-        removeApiKeyBtn.visibility = if (p.apiKey.isNotEmpty() && p.encryptionWorks && editable) View.VISIBLE else View.GONE
+        // Configuration Section Locking
+        val configEditable = !isConfigLocked
+        protectWifiCb.isEnabled = configEditable; protectMobileCb.isEnabled = configEditable; protectOtherCb.isEnabled = configEditable
+        profile.isEnabled = configEditable; device.isEnabled = configEditable && !p.useDeviceName; useDeviceNameCb.isEnabled = configEditable
+        apiKey.isEnabled = configEditable && p.apiKey.isEmpty() && p.encryptionWorks; apiKeyLayout.alpha = if (apiKey.isEnabled) 1.0f else 0.5f
+        removeApiKeyBtn.visibility = if (p.apiKey.isNotEmpty() && p.encryptionWorks && configEditable) View.VISIBLE else View.GONE
         
-        saveConfigBtn.text = if (isLocked) "Unlock Configuration 🔒" else "Save Configuration 🔓"
-        saveConfigBtn.isEnabled = true 
+        saveConfigBtn.text = if (isConfigLocked) "Unlock Configuration 🔒" else "Save Configuration 🔓"
+        if (!isAdmin) {
+            saveConfigBtn.text = "Save Configuration"
+            saveConfigBtn.visibility = View.VISIBLE
+        }
+        
+        // Admin Settings Section Locking
+        val adminEditable = !isAdminSettingsLockedState
+        adminEmailEt.isEnabled = adminEditable; adminPhoneEt.isEnabled = adminEditable
+        if (p.controlMode == 1) { adminEmailEt.alpha = 0.3f; adminPhoneEt.alpha = 0.3f; adminEmailEt.isEnabled = false; adminPhoneEt.isEnabled = false } 
+        else { adminEmailEt.alpha = 1.0f; adminPhoneEt.alpha = 1.0f }
+        
+        saveAdminBtn.visibility = vis
+        saveAdminBtn.text = if (isAdminSettingsLockedState) "Unlock Admin Settings 🔒" else "Save Admin Settings 🔓"
+        if (!isAdmin) saveAdminBtn.visibility = View.GONE
         
         if (!p.encryptionWorks) { apiKey.hint = "Security initialization failed"; apiKey.setText("") } else if (p.apiKey.isNotEmpty()) { apiKey.setText("********"); apiKey.transformationMethod = PasswordTransformationMethod.getInstance() }
         if (p.lastSuccessfulTest > 0) lastTestTv.text = "Last DNS Test: ${SimpleDateFormat("MMM dd, HH:mm", Locale.getDefault()).format(Date(p.lastSuccessfulTest))}"
         else { lastTestTv.text = "Last DNS Test: Never"; updateCircleColor(dnsCheckCircle, "#9E9E9E"); updateCircleColor(browserWarningCircle, "#9E9E9E"); updateCircleColor(connectivityCircle, "#9E9E9E"); updateCircleColor(cloudCircle, "#9E9E9E") }
         
-        pinManageBtn.text = if (p.pinHash == null) "Set App PIN" else "Manage App PIN 🔒"; appExclusionBtn.text = "App Exclusions (${p.excludedApps.size}) 🔒"
+        pinManageBtn.text = if (p.pinHash == null) "Set App PIN" else "Manage App PIN 🔒"
+        appExclusionBtn.text = if (isAdmin) "App Exclusions (${p.excludedApps.size}) 🔒" else "App Exclusions (${p.excludedApps.size})"
         adminSwitchBtn.text = if (p.controlMode == 2) "Change to User Setup" else "Change to Admin-controlled setup"
-        
-        if (p.controlMode == 1) { adminEmailEt.alpha = 0.3f; adminPhoneEt.alpha = 0.3f; adminEmailEt.isEnabled = false; adminPhoneEt.isEnabled = false } 
-        else { adminEmailEt.alpha = 1.0f; adminPhoneEt.alpha = 1.0f; adminEmailEt.isEnabled = editable; adminPhoneEt.isEnabled = editable }
     }
 
     private fun setBtnStatus(btn: Button, ok: Boolean, critical: Boolean) {
@@ -529,13 +552,54 @@ class MainActivity : AppCompatActivity() {
     private fun versionName() = try { packageManager.getPackageInfo(packageName, 0).versionName } catch (_: Exception) { "unknown" }
     private fun isAlwaysOnVpnEnabled(): Boolean = Settings.Secure.getString(contentResolver, "always_on_vpn_app") == packageName
     private fun showCompatibilityReport(isAuto: Boolean) {
-        val pm = getSystemService(POWER_SERVICE) as PowerManager; val isBatteryExempt = pm.isIgnoringBatteryOptimizations(packageName)
-        val report = buildString { append("CORE SERVICES (Required)\n• DNS-only VPN: Core Support\n• NextDNS DoH: Core Support\n• Encrypted Storage: ${if (p.encryptionWorks) "Required (Active)" else "FAILED"}\n\n")
-            append("RECOMMENDED (For Reliability)\n• Always-On VPN: ${if (isAlwaysOnVpnEnabled()) "Active" else "Highly Recommended"}\n• Battery Exemption: ${if (isBatteryExempt) "Active" else "Recommended"}\n• Boot Auto-Start: ${if (p.autoStart) "Active" else "Use"}\n• Foreground Service: ${if (p.foregroundService) "Active" else "Use"}\n\n")
-            append("OPTIONAL (Features)\n• NextDNS API: ${if (p.apiKey.isNotEmpty()) "Configured" else "Optional"}\n• Wi-Fi Exclusions: ${if (p.excluded.isNotEmpty()) "In Use (${p.excluded.size})" else "Optional"}\n• PIN Protection: ${if (p.pinHash != null) "Active" else "Optional"}") }
+        val pm = getSystemService(POWER_SERVICE) as PowerManager
+        val isBatteryExempt = pm.isIgnoringBatteryOptimizations(packageName)
+        val isLockdown = Settings.Secure.getInt(contentResolver, "always_on_vpn_lockdown", 0) == 1
+        
+        val report = buildString { 
+            append("REQUIRED CORE SERVICES\n")
+            append("• DNS-only VPN: Active\n")
+            append("• NextDNS DoH: Active\n")
+            append("• Encrypted Storage: ${if (p.encryptionWorks) "Active" else "DISABLED"}\n\n")
+            
+            append("RECOMMENDED FOR RELIABILITY\n")
+            append("• Always-On VPN: ${if (isAlwaysOnVpnEnabled()) "Active" else "Disabled"}\n")
+            append("• Battery Exemption: ${if (isBatteryExempt) "Active" else "Disabled"}\n")
+            append("• Boot Auto-Start: ${if (p.autoStart) "Active" else "Disabled"}\n")
+            append("• Foreground Service: ${if (p.foregroundService) "Active" else "Disabled"}\n\n")
+            
+            append("OPTIONAL\n")
+            append("• NextDNS API: ${if (p.apiKey.isNotEmpty()) "Active" else "Disabled"}\n")
+            append("• Wi-Fi Exclusions: ${if (p.excluded.isNotEmpty()) "Active (${p.excluded.size})" else "Disabled"}\n")
+            append("• Admin setup w/PIN: ${if (p.pinHash != null) "Active" else "Disabled"}\n")
+            append("• App Exclusion: ${if (p.excludedApps.isNotEmpty()) "Active (${p.excludedApps.size})" else "Disabled"}\n")
+            append("• VPN Lockdown: ${if (isLockdown) "Active" else "Disabled"}")
+        }
         AlertDialog.Builder(this).setTitle(if (isAuto) "Version Update: Support Report" else "Device Support Report").setMessage(report).setPositiveButton("OK", null).show() }
+        
     private fun checkBatteryOptimizationOnStartup() { val pm = getSystemService(POWER_SERVICE) as PowerManager; if (!pm.isIgnoringBatteryOptimizations(packageName)) { AlertDialog.Builder(this).setTitle("Performance Warning").setMessage("Android may stop DNS Routing in the background if battery optimization is enabled. For reliable automatic DNS Protection, allow DNS Router to run without battery optimization.").setPositiveButton("Disable") { _, _ -> showBatteryDialog() }.setNegativeButton("Later", null).show() } }
-    private fun showBatteryDialog() { AlertDialog.Builder(this).setTitle("Background Reliability").setMessage("To prevent the system from killing the VPN service, you must disable battery optimization for DNS Router. On the next screen, find this app and select 'Don't optimize' or 'Unrestricted'.").setPositiveButton("Proceed") { _, _ -> openBatterySettings() }.setNegativeButton("Cancel", null).show() }
+    
+    private fun showBatteryDialog() { 
+        val pm = getSystemService(POWER_SERVICE) as PowerManager
+        if (pm.isIgnoringBatteryOptimizations(packageName)) {
+            AlertDialog.Builder(this)
+                .setTitle("Battery Optimization")
+                .setMessage("Battery optimization is already disabled (Unrestricted). To change this, you must use Android System Settings.")
+                .setPositiveButton("System Settings") { _, _ -> 
+                    try { startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).setData("package:$packageName".toUri())) } catch (_: Exception) {}
+                }
+                .setNegativeButton("Cancel", null)
+                .show()
+        } else {
+            AlertDialog.Builder(this)
+                .setTitle("Background Reliability")
+                .setMessage("To prevent the system from killing the VPN service, you must disable battery optimization for DNS Router. On the next screen, find this app and select 'Don't optimize' or 'Unrestricted'.")
+                .setPositiveButton("Proceed") { _, _ -> openBatterySettings() }
+                .setNegativeButton("Cancel", null)
+                .show() 
+        }
+    }
+    
     private fun managePin() { 
         if (p.pinHash == null) {
             showSetPinDialog()
@@ -565,7 +629,8 @@ class MainActivity : AppCompatActivity() {
                                                 p.adminEmail = ""
                                                 p.adminPhone = ""
                                                 p.controlMode = 1
-                                                isSettingsUnlocked = false
+                                                isConfigUnlocked = false
+                                                isAdminSettingsUnlocked = false
                                                 buildUi()
                                                 updateUi()
                                                 toast("PIN removed. App is now in User Setup.")
@@ -629,7 +694,7 @@ class MainActivity : AppCompatActivity() {
     }
     private fun fetchNextDnsStats(profile: String, key: String): String { return try { val url = URL("https://api.nextdns.io/profiles/$profile/analytics/status"); val conn = url.openConnection() as HttpURLConnection; conn.setRequestProperty("X-Api-Key", key); conn.connectTimeout = 10000; conn.readTimeout = 10000; if (conn.responseCode == 200) parseAnalyticsStatus(conn.inputStream.bufferedReader().readText()) else "Error ${conn.responseCode}: ${conn.responseMessage}" } catch (e: Exception) { "Error: ${e.message}" } }
     private fun parseAnalyticsStatus(json: String): String { val total = Regex("\"totalQueries\":\\s*(\\d+)").find(json)?.groupValues?.get(1) ?: "0"; val blocked = Regex("\"blockedQueries\":\\s*(\\d+)").find(json)?.groupValues?.get(1) ?: "0"; return "Total Queries: $total\nBlocked: $blocked" }
-    private fun showSetup() { AlertDialog.Builder(this).setTitle("Always-On VPN Protection").setMessage("Highly Recommended: Enabling 'Always-on VPN' in Android settings ensures DNS Router is automatically managed by the system.\n\nRisk: If NOT enabled, DNS queries may bypass NextDNS during network transitions or if the app is stopped.\n\nOptional: 'Block connections without VPN' provides strict protection by disabling internet if the VPN is not connected.").setPositiveButton("Open Settings") { _, _ -> try { startActivity(Intent(Settings.ACTION_VPN_SETTINGS)) } catch (_: Exception) {} }.setNegativeButton("Close", null).show() }
+    private fun showSetup() { AlertDialog.Builder(this).setTitle("Always-On VPN Protection").setMessage("Highly Recommended: Enabling 'Always-on VPN' in Android settings ensures DNS Router is automatically managed by the system.\n\nRisk: If NOT enabled, DNS queries may bypass NextDNS during network transitions or if the app is stopped.\n\nOptional: 'Block connections without VPN' (Lockdown) provides strict protection by disabling internet if the VPN is not connected.").setPositiveButton("Open Settings") { _, _ -> try { startActivity(Intent(Settings.ACTION_VPN_SETTINGS)) } catch (_: Exception) {} }.setNegativeButton("Close", null).show() }
     private fun openBatterySettings() { try { startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).setData("package:$packageName".toUri())) } catch (_: Exception) { startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) } }
     private fun requestWifiPermission() { if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) { locationPermission.launch(Manifest.permission.ACCESS_FINE_LOCATION) } else { checkBatteryOptimizationOnStartup() } }
     @Suppress("DEPRECATION")
